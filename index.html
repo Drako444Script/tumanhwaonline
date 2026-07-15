@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TuManhwaOnline — Lector y Repositorio de Manga y Manhwa</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Top bar (Usuario / Login) -->
+  <div class="topbar">
+    <div class="container topbar-inner">
+      <span class="welcome-text">¡Bienvenido a TuManhwaOnline, el repositorio de la comunidad!</span>
+      <div class="auth-section" id="auth-section">
+        <!-- Opciones de Login/Registro se cargan aquí -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Header Principal -->
+  <header class="header">
+    <div class="container header-inner">
+      <div class="logo" onclick="goHome()">
+        <span class="logo-main">TuManhwaOnline</span>
+        <span class="logo-tag">Comunidad</span>
+      </div>
+      
+      <div class="search-box">
+        <input type="text" id="search-input" placeholder="Buscar por nombre, autor...">
+        <button onclick="triggerSearch()">Buscar</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navegación Principal -->
+  <nav class="nav">
+    <div class="container nav-inner">
+      <div class="nav-links">
+        <a href="#" class="nav-link active" onclick="setFilterType('all', this)">Inicio</a>
+        <a href="#" class="nav-link" onclick="setFilterType('manga', this)">Mangas</a>
+        <a href="#" class="nav-link" onclick="setFilterType('manhwa', this)">Manhwas</a>
+        <a href="#" class="nav-link" onclick="setFilterType('manhua', this)">Manhuas</a>
+        <a href="#" class="nav-link" onclick="setFilterType('novel', this)">Novelas</a>
+        <a href="#" class="nav-link text-red" onclick="toggleNSFWFilter(this)">Zona +18</a>
+      </div>
+      <button class="btn-subir" onclick="openUploadModal()">+ Subir Manga</button>
+    </div>
+  </nav>
+
+  <!-- Contenido Principal -->
+  <div class="container main-layout">
+    
+    <!-- Columna Principal -->
+    <main class="content-col" id="main-content">
+      
+      <!-- Vista de Catálogo -->
+      <div id="catalog-view">
+        <div class="section-title">Últimas Publicaciones de la Comunidad</div>
+        <div class="manga-grid" id="manga-grid">
+          <!-- Las tarjetas de manga se cargan dinámicamente -->
+        </div>
+      </div>
+
+      <!-- Vista de Detalle -->
+      <div id="detail-view" style="display: none;">
+        <!-- Se carga dinámicamente -->
+      </div>
+
+      <!-- Vista de Lector -->
+      <div id="reader-view" style="display: none;">
+        <!-- Se carga dinámicamente -->
+      </div>
+
+    </main>
+
+    <!-- Columna Lateral (Sidebar) -->
+    <aside class="sidebar-col" id="sidebar">
+      
+      <!-- Panel de Géneros -->
+      <div class="panel">
+        <div class="panel-header">Filtrar por Géneros</div>
+        <div class="panel-body">
+          <ul class="genre-list" id="genre-list">
+            <!-- Cargado por JS -->
+          </ul>
+        </div>
+      </div>
+
+      <!-- Panel de Estadísticas -->
+      <div class="panel">
+        <div class="panel-header">Estadísticas del Portal</div>
+        <div class="panel-body">
+          <table class="stats-table">
+            <tr>
+              <td>Títulos subidos:</td>
+              <td class="text-right" id="stat-titles">0</td>
+            </tr>
+            <tr>
+              <td>Capítulos leídos:</td>
+              <td class="text-right" id="stat-chapters">0</td>
+            </tr>
+            <tr>
+              <td>Colaboradores:</td>
+              <td class="text-right" id="stat-users">0</td>
+            </tr>
+          </table>
+        </div>
+      </div>
+
+      <!-- Disclaimer Latino antiguo -->
+      <div class="panel disclaimer-panel">
+        <div class="panel-header">Aviso Legal / DMCA</div>
+        <div class="panel-body">
+          <p>TuManhwaOnline es un sitio web creado por fans para fans. No almacenamos ningún archivo con derechos de autor en nuestros servidores de manera directa. Si deseas remover un manga, contáctanos.</p>
+        </div>
+      </div>
+
+    </aside>
+  </div>
+
+  <!-- Pie de Página -->
+  <footer class="footer">
+    <div class="container footer-inner">
+      <p>© 2012-2026 TuManhwaOnline.com - Tu portal de manhwas y mangas en español. ¡Hecho en Latinoamérica!</p>
+      <div class="footer-links">
+        <a href="#" onclick="openModal('terms-modal'); return false;">Términos y condiciones</a>
+        <a href="#" onclick="openModal('contact-modal'); return false;">Contacto / Soporte</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ════ MODALES CLÁSICOS ════ -->
+
+  <!-- Modal de Login -->
+  <div class="modal-overlay" id="login-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span>Iniciar Sesión</span>
+        <button class="close-btn" onclick="closeModal('login-modal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <form onsubmit="doLogin(event)">
+          <div class="form-group">
+            <label>Nombre de usuario / Email:</label>
+            <input type="text" id="login-user" required>
+          </div>
+          <div class="form-group">
+            <label>Contraseña:</label>
+            <input type="password" id="login-pass" required>
+          </div>
+          <button type="submit" class="btn-submit">Ingresar</button>
+        </form>
+        <p class="modal-footer-text">¿No tienes cuenta? <a href="#" onclick="closeModal('login-modal'); openModal('register-modal');">Regístrate gratis</a></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Registro -->
+  <div class="modal-overlay" id="register-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span>Registro de Usuario</span>
+        <button class="close-btn" onclick="closeModal('register-modal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <form onsubmit="doRegister(event)">
+          <div class="form-group">
+            <label>Nombre de usuario:</label>
+            <input type="text" id="reg-user" required>
+          </div>
+          <div class="form-group">
+            <label>Correo electrónico:</label>
+            <input type="email" id="reg-email" required>
+          </div>
+          <div class="form-group">
+            <label>Contraseña:</label>
+            <input type="password" id="reg-pass" required>
+          </div>
+          <button type="submit" class="btn-submit">Registrarse</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Subida -->
+  <div class="modal-overlay" id="upload-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span>Subir Nueva Traducción</span>
+        <button class="close-btn" onclick="closeModal('upload-modal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <form onsubmit="doUpload(event)">
+          <div class="form-group">
+            <label>Título del Manga/Manhwa:</label>
+            <input type="text" id="up-title" required placeholder="Ej: Solo Leveling">
+          </div>
+          <div class="form-group">
+            <label>Tipo:</label>
+            <select id="up-type">
+              <option value="manga">Manga (Japonés)</option>
+              <option value="manhwa">Manhwa (Coreano)</option>
+              <option value="manhua">Manhua (Chino)</option>
+              <option value="novel">Novela Ligera</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Autor:</label>
+            <input type="text" id="up-author" required placeholder="Ej: Chugong">
+          </div>
+          <div class="form-group">
+            <label>Géneros (separados por comas):</label>
+            <input type="text" id="up-genres" required placeholder="Ej: Acción, Aventura, Fantasía">
+          </div>
+          <div class="form-group">
+            <label>Sinopsis / Descripción:</label>
+            <textarea id="up-desc" rows="3" required></textarea>
+          </div>
+          <div class="form-group checkbox-group">
+            <input type="checkbox" id="up-nsfw">
+            <label for="up-nsfw"><strong>Contenido +18 (Contiene escenas explícitas)</strong></label>
+          </div>
+          <button type="submit" class="btn-submit">Subir y Publicar</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Subida de Capítulo -->
+  <div class="modal-overlay" id="upload-chapter-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span>Subir Nuevo Capítulo</span>
+        <button class="close-btn" onclick="closeModal('upload-chapter-modal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <form onsubmit="doUploadChapter(event)">
+          <div class="form-group">
+            <label>Manga Seleccionado:</label>
+            <input type="text" id="upch-manga-title" disabled style="background-color:#eaeded; font-weight:bold;">
+          </div>
+          <div class="form-group">
+            <label>Número del Capítulo:</label>
+            <input type="number" id="upch-num" required min="1" placeholder="Ej: 15">
+          </div>
+          <div class="form-group">
+            <label>Nombre del Capítulo (Opcional):</label>
+            <input type="text" id="upch-name" placeholder="Ej: El despertar de las sombras">
+          </div>
+          <div class="form-group">
+            <label>Grupo / Scan Traductor (Opcional):</label>
+            <input type="text" id="upch-scan" placeholder="Ej: CyberScan">
+          </div>
+          <button type="submit" class="btn-submit">Publicar Capítulo</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Términos -->
+  <div class="modal-overlay" id="terms-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span>Términos del Portal</span>
+        <button class="close-btn" onclick="closeModal('terms-modal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <p>TuManhwaOnline es una plataforma pública y gratuita. Toda traducción subida es responsabilidad del usuario uploader. Respeta el trabajo de los scans.</p>
+        <button class="btn-submit" onclick="closeModal('terms-modal')">Aceptar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Contacto -->
+  <div class="modal-overlay" id="contact-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span>Contacto / Soporte / DMCA</span>
+        <button class="close-btn" onclick="closeModal('contact-modal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <form onsubmit="doContact(event)">
+          <div class="form-group">
+            <label>Tu Correo Electrónico:</label>
+            <input type="email" id="contact-email" required placeholder="ejemplo@correo.com">
+          </div>
+          <div class="form-group">
+            <label>Asunto:</label>
+            <input type="text" id="contact-subject" required placeholder="DMCA, Error, Consulta de Scan...">
+          </div>
+          <div class="form-group">
+            <label>Mensaje:</label>
+            <textarea id="contact-msg" rows="4" required placeholder="Escribe detalladamente tu mensaje..."></textarea>
+          </div>
+          <button type="submit" class="btn-submit">Enviar Mensaje</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Descarga Simulada -->
+  <div class="modal-overlay" id="download-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span>Descarga Directa</span>
+        <button class="close-btn" onclick="closeModal('download-modal')">✕</button>
+      </div>
+      <div class="modal-body" style="text-align: center; padding: 20px;">
+        <p id="download-status" style="font-weight: bold; margin-bottom: 12px; color: #2c3e50;">Conectando con el servidor de descargas...</p>
+        <div style="background-color: #eaeded; border: 1px solid #bdc3c7; height: 18px; border-radius: 3px; overflow: hidden; margin-bottom: 15px;">
+          <div id="download-progress-bar" style="background-color: #27ae60; height: 100%; width: 0%; transition: width 0.15s ease-out;"></div>
+        </div>
+        <p style="font-size: 11px; color: #7f8c8d; line-height: 1.4;">Comprimiendo capítulos en formato .ZIP.<br>Por favor, no cierres esta ventana.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Reportar Capítulo / Error -->
+  <div class="modal-overlay" id="report-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span>Reportar Capítulo Caído o Error</span>
+        <button class="close-btn" onclick="closeModal('report-modal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <form onsubmit="doReportChapter(event)">
+          <div class="form-group">
+            <label>Tipo de Problema:</label>
+            <select id="rep-issue-type">
+              <option value="caido">Las imágenes no cargan (Capítulo caído)</option>
+              <option value="mala-traduccion">Mala traducción / Textos cortados</option>
+              <option value="orden">Páginas desordenadas o repetidas</option>
+              <option value="otro">Otro problema</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Detalle Adicional (Opcional):</label>
+            <textarea id="rep-details" rows="3" placeholder="Ej: La página 3 se ve en negro..."></textarea>
+          </div>
+          <button type="submit" class="btn-submit" style="background-color: #e74c3c;">Enviar Reporte</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Clasificación de Biblioteca / Favoritos -->
+  <div class="modal-overlay" id="library-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span>Organizar en Biblioteca</span>
+        <button class="close-btn" onclick="closeModal('library-modal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom: 12px; font-size:13px; color:#555;">Selecciona en qué sección de tu biblioteca quieres guardar esta obra:</p>
+        <div class="form-group">
+          <label>Estado de lectura:</label>
+          <select id="lib-status-select">
+            <option value="leyendo">Leyendo actualmente</option>
+            <option value="pendiente">Pendiente (Por leer)</option>
+            <option value="completado">Completado</option>
+          </select>
+        </div>
+        <button class="btn-submit" onclick="saveToLibrarySection()">Guardar Cambios</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Perfil de Usuario -->
+  <div class="modal-overlay" id="profile-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span>Mi Perfil de Usuario</span>
+        <button class="close-btn" onclick="closeModal('profile-modal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <div style="width: 60px; height: 60px; border-radius: 50%; background-color:#2c3e50; color:#fff; display:flex; justify-content:center; align-items:center; font-size:24px; font-weight:bold; margin: 0 auto 10px;" id="profile-avatar">U</div>
+          <h2 id="profile-username" style="color:#2c3e50;">Usuario</h2>
+          <p id="profile-email" style="font-size:12px; color:#7f8c8d;">correo@tumanhwaonline.com</p>
+        </div>
+        <div class="panel">
+          <div class="panel-header">Estadísticas Personales</div>
+          <div class="panel-body">
+            <table class="stats-table">
+              <tr>
+                <td>Capítulos leídos:</td>
+                <td class="text-right" id="profile-stat-read">0</td>
+              </tr>
+              <tr>
+                <td>Títulos en Biblioteca:</td>
+                <td class="text-right" id="profile-stat-library">0</td>
+              </tr>
+              <tr>
+                <td>Capítulos aportados (Scan):</td>
+                <td class="text-right" id="profile-stat-uploads">0</td>
+              </tr>
+            </table>
+          </div>
+        </div>
+        <button class="btn-submit" onclick="closeModal('profile-modal')">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast (Notificaciones simples) -->
+  <div class="toast-box" id="toast">Notificación</div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="app.js"></script>
+</body>
+</html>
