@@ -197,6 +197,10 @@
             <input type="text" id="up-title" required placeholder="Ej: Solo Leveling">
           </div>
           <div class="form-group">
+            <label>URL de la Portada (Opcional):</label>
+            <input type="url" id="up-cover" placeholder="Ej: https://i.imgur.com/TuImagen.jpg">
+          </div>
+          <div class="form-group">
             <label>Tipo:</label>
             <select id="up-type">
               <option value="manga">Manga (Japonés)</option>
@@ -251,6 +255,10 @@
           <div class="form-group">
             <label>Grupo / Scan Traductor (Opcional):</label>
             <input type="text" id="upch-scan" placeholder="Ej: CyberScan">
+          </div>
+          <div class="form-group">
+            <label>Páginas del Capítulo (URLs de imágenes, una por línea):</label>
+            <textarea id="upch-pages" rows="5" required placeholder="Pega los enlaces directos a las imágenes, uno por línea. Ej:&#10;https://i.imgur.com/pag1.jpg&#10;https://i.imgur.com/pag2.jpg"></textarea>
           </div>
           <button type="submit" class="btn-submit">Publicar Capítulo</button>
         </form>
@@ -374,12 +382,15 @@
         <button class="close-btn" onclick="closeModal('profile-modal')">✕</button>
       </div>
       <div class="modal-body">
-        <div style="text-align: center; margin-bottom: 20px;">
-          <div style="width: 60px; height: 60px; border-radius: 50%; background-color:#2c3e50; color:#fff; display:flex; justify-content:center; align-items:center; font-size:24px; font-weight:bold; margin: 0 auto 10px;" id="profile-avatar">U</div>
-          <h2 id="profile-username" style="color:#2c3e50;">Usuario</h2>
-          <p id="profile-email" style="font-size:12px; color:#7f8c8d;">correo@tumanhwaonline.com</p>
+        <div style="text-align: center; margin-bottom: 15px;">
+          <img id="profile-avatar-img" src="" alt="Avatar" style="width: 70px; height: 70px; border-radius: 50%; border: 2px solid #2c3e50; object-fit: cover; display: none; margin: 0 auto 10px;">
+          <div style="width: 70px; height: 70px; border-radius: 50%; background-color:#2c3e50; color:#fff; display:flex; justify-content:center; align-items:center; font-size:28px; font-weight:bold; margin: 0 auto 10px;" id="profile-avatar">U</div>
+          <h2 id="profile-username" style="color:#2c3e50; margin-bottom: 2px;">Usuario</h2>
+          <p id="profile-email" style="font-size:12px; color:#7f8c8d; margin-bottom: 4px;">correo@tumanhwaonline.com</p>
+          <p id="profile-bio-text" style="font-size:13px; font-style:italic; color:#555; background:#f4f6f7; padding:6px; border-radius:3px; margin: 5px 0 10px;">Sin biografía.</p>
         </div>
-        <div class="panel">
+
+        <div class="panel" style="margin-bottom: 15px;">
           <div class="panel-header">Estadísticas Personales</div>
           <div class="panel-body">
             <table class="stats-table">
@@ -398,7 +409,28 @@
             </table>
           </div>
         </div>
-        <button class="btn-submit" onclick="closeModal('profile-modal')">Cerrar</button>
+
+        <!-- Formulario para Personalizar Perfil -->
+        <div class="panel">
+          <div class="panel-header">Personalizar Mi Perfil</div>
+          <div class="panel-body">
+            <form onsubmit="saveProfileSettings(event)">
+              <div class="form-group">
+                <label>Apodo / Mostrar Nombre:</label>
+                <input type="text" id="prof-display-name" required>
+              </div>
+              <div class="form-group">
+                <label>URL de Imagen de Avatar:</label>
+                <input type="url" id="prof-avatar-url" placeholder="Ej: https://i.imgur.com/Avatar.png">
+              </div>
+              <div class="form-group">
+                <label>Sobre Mí (Biografía):</label>
+                <input type="text" id="prof-bio" placeholder="Ej: Fanático de los manhwas de acción y mazmorras.">
+              </div>
+              <button type="submit" class="btn-submit" style="margin-top: 5px;">Guardar Configuración</button>
+            </form>
+          </div>
+        </div>
       </div>
     </div>
   </div>

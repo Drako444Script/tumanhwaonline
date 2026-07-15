@@ -154,29 +154,64 @@ function renderAuth() {
 function openProfileModal() {
   if (!state.currentUser) return;
 
-  let totalRead = 0;
-  Object.keys(state.readChapters).forEach(key => {
+  var totalRead = 0;
+  Object.keys(state.readChapters).forEach(function(key) {
     totalRead += state.readChapters[key].length;
   });
 
   const libSize = Object.keys(state.library).length;
-  const userUploads = state.catalog.filter(m => m.uploader === state.currentUser.username).length;
+  const userUploads = state.catalog.filter(function(m) { return m.uploader === state.currentUser.username; }).length;
 
-  document.getElementById('profile-avatar').textContent = state.currentUser.username[0].toUpperCase();
+  var avatarImg = document.getElementById('profile-avatar-img');
+  var avatarDiv = document.getElementById('profile-avatar');
+  
+  if (state.currentUser.avatar && state.currentUser.avatar.trim() !== "") {
+    avatarImg.src = state.currentUser.avatar;
+    avatarImg.style.display = 'block';
+    avatarDiv.style.display = 'none';
+  } else {
+    avatarImg.style.display = 'none';
+    avatarDiv.style.display = 'flex';
+    avatarDiv.textContent = state.currentUser.username[0].toUpperCase();
+  }
+
   document.getElementById('profile-username').textContent = state.currentUser.username;
   document.getElementById('profile-email').textContent = state.currentUser.email;
-  document.getElementById('profile-stat-read').textContent = totalRead;
-  document.getElementById('profile-stat-library').textContent = libSize;
-  document.getElementById('profile-stat-uploads').textContent = userUploads;
+  document.getElementById('profile-bio-text').textContent = state.currentUser.bio || "Sin biografía.";
+
+  // Rellenar formulario de edición
+  document.getElementById('prof-display-name').value = state.currentUser.username;
+  document.getElementById('prof-avatar-url').value = state.currentUser.avatar || '';
+  document.getElementById('prof-bio').value = state.currentUser.bio || '';
 
   openModal('profile-modal');
+}
+
+function saveProfileSettings(e) {
+  e.preventDefault();
+  if (!state.currentUser) return;
+
+  var newUsername = document.getElementById('prof-display-name').value.trim();
+  var newAvatar = document.getElementById('prof-avatar-url').value.trim();
+  var newBio = document.getElementById('prof-bio').value.trim();
+
+  if (newUsername) {
+    state.currentUser.username = newUsername;
+    state.currentUser.avatar = newAvatar;
+    state.currentUser.bio = newBio;
+    saveState();
+    renderAuth();
+    showToast("¡Perfil guardado con éxito!");
+    closeModal('profile-modal');
+    refreshCurrentView();
+  }
 }
 
 function doLogin(e) {
   e.preventDefault();
   const username = document.getElementById('login-user').value.trim();
   if (username) {
-    state.currentUser = { username, email: username + '@tumanhwaonline.com' };
+    state.currentUser = { username, email: username + '@tumanhwaonline.com', avatar: '', bio: '' };
     saveState();
     renderAuth();
     closeModal('login-modal');
@@ -190,7 +225,7 @@ function doRegister(e) {
   const username = document.getElementById('reg-user').value.trim();
   const email = document.getElementById('reg-email').value.trim();
   if (username && email) {
-    state.currentUser = { username, email };
+    state.currentUser = { username, email, avatar: '', bio: '' };
     saveState();
     renderAuth();
     closeModal('register-modal');
@@ -345,6 +380,7 @@ function setFilterType(type, element) {
   goHome();
 }
 
+// Cambiar filtro por género
 function setFilterGenre(genre) {
   state.filterGenre = genre;
   renderGenres();
@@ -357,11 +393,18 @@ function triggerSearch() {
 }
 
 function toggleNSFWFilter(element) {
-  state.showNSFW = !state.showNSFW;
-  if (state.showNSFW) {
+  if (!state.showNSFW) {
+    var confirmar = confirm("ADVERTENCIA: Esta sección contiene material exclusivo para adultos (+18) que puede incluir violencia o escenas explícitas.\n\n¿Confirmas que eres mayor de 18 años y deseas ingresar a la Zona +18?");
+    if (!confirmar) {
+      state.showNSFW = false;
+      element.classList.remove('active');
+      return;
+    }
+    state.showNSFW = true;
     element.classList.add('active');
-    showToast("Has entrado a la Zona +18");
+    showToast("🔞 Has entrado a la Zona +18");
   } else {
+    state.showNSFW = false;
     element.classList.remove('active');
     showToast("Saliste de la Zona +18");
   }
@@ -496,14 +539,25 @@ function showDetail(id) {
 
 function startReading() {
   if (state.selectedManga) {
-    openReader(1);
+    // Si tiene capítulos subidos, leer el primero. Si no, avisar.
+    if (state.selectedManga.chapters >= 1) {
+      openReader(1);
+    } else {
+      showToast("Aún no hay capítulos subidos para esta obra.");
+    }
   }
 }
 
 function renderChaptersList(manga) {
   var html = '';
-  for (var i = 0; i < manga.chapters; i++) {
-    var num = state.sortOrder === 'desc' ? manga.chapters - i : i + 1;
+  var total = manga.chapters;
+  
+  if (total === 0) {
+    return '<li style="padding:15px; color:#888; text-align:center; font-size:12px; list-style:none;">No hay capítulos todavía. ¡Sube el primero presionando "+ Agregar Capítulo"!</li>';
+  }
+
+  for (var i = 0; i < total; i++) {
+    var num = state.sortOrder === 'desc' ? total - i : i + 1;
     var readChaps = state.readChapters[manga.id] || [];
     var isRead = readChaps.indexOf(num) !== -1;
     html += '<li class="chapter-row ' + (isRead ? 'read' : '') + '" data-chapter="' + num + '">' +
@@ -595,7 +649,24 @@ function openReader(chapterNum) {
   var readerView = document.getElementById('reader-view');
   readerView.style.display = 'block';
 
-  var count = 12;
+  // Buscar páginas reales en el manga
+  var pages = [];
+  if (manga.chaptersData && manga.chaptersData[chapterNum]) {
+    pages = manga.chaptersData[chapterNum];
+  }
+
+  var count = pages.length;
+  var usingPlaceholders = false;
+
+  // Si no hay páginas subidas, usar placeholders clásicos de respaldo para demostración
+  if (count === 0) {
+    count = 8;
+    usingPlaceholders = true;
+    for (var i = 1; i <= count; i++) {
+      pages.push('placeholder');
+    }
+  }
+
   state.totalPagesCount = count;
   state.currentPageIndex = 1;
 
@@ -604,22 +675,39 @@ function openReader(chapterNum) {
   var singlePageHTML = '';
 
   for (var i = 1; i <= count; i++) {
-    pagesHtml += '<div id="page-' + i + '" class="lector-page-placeholder" style="height:' + (650 + Math.random() * 50) + 'px; margin-bottom:10px;">' +
-      '<div style="text-align:center;">' +
-        '<div style="font-size:36px; margin-bottom:10px;">📖</div>' +
-        '<div style="font-weight:bold;">' + manga.title + '</div>' +
-        '<div>Capítulo ' + chapterNum + ' - Página ' + i + ' de ' + count + '</div>' +
-        '<div style="color:#666; font-size:10px; margin-top:5px;">[TuManhwaOnline - Repositorio Comunitario]</div>' +
-      '</div>' +
-    '</div>';
+    var pageUrl = pages[i - 1];
+    var pageContentCascade = '';
+    var pageContentSingle = '';
+
+    if (usingPlaceholders) {
+      pageContentCascade = '<div class="lector-page-placeholder" style="height:' + (650 + Math.random() * 50) + 'px; margin-bottom:10px;">' +
+        '<div style="text-align:center;">' +
+          '<div style="font-size:36px; margin-bottom:10px;">📖</div>' +
+          '<div style="font-weight:bold;">' + manga.title + '</div>' +
+          '<div>Capítulo ' + chapterNum + ' - Página ' + i + ' de ' + count + '</div>' +
+          '<div style="color:#666; font-size:10px; margin-top:5px;">[TuManhwaOnline - Modo Demostración]</div>' +
+        '</div>' +
+      '</div>';
+
+      pageContentSingle = '<div id="single-page-' + i + '" class="lector-page-placeholder lector-page-single ' + (i === 1 ? 'active' : '') + '" style="height:650px;">' +
+        '<div style="text-align:center; padding-top:150px;">' +
+          '<div style="font-size:42px; margin-bottom:15px;">📖</div>' +
+          '<div style="font-weight:bold; font-size:16px;">' + manga.title + '</div>' +
+          '<div style="margin-top:5px; font-size:13px;">Capítulo ' + chapterNum + ' - Página ' + i + ' de ' + count + '</div>' +
+        '</div>' +
+      '</div>';
+    } else {
+      // Usar imágenes reales subidas por el usuario
+      pageContentCascade = '<div id="page-' + i + '" class="lector-page-real" style="text-align:center; margin-bottom:12px;">' +
+        '<img src="' + pageUrl + '" alt="Página ' + i + '" style="max-width:100%; height:auto; display:block; margin:0 auto; border: 1px solid #ddd;" onerror="this.src=\'https://placehold.co/600x900/555/fff?text=Error+al+cargar+página+' + i + '\'">' +
+      '</div>';
+
+      pageContentSingle = '<img id="single-page-' + i + '" class="lector-page-single ' + (i === 1 ? 'active' : '') + '" src="' + pageUrl + '" alt="Página ' + i + '" style="max-width:100%; max-height:80vh; height:auto; display:' + (i === 1 ? 'block' : 'none') + '; margin:0 auto; border: 1px solid #ddd;" onerror="this.src=\'https://placehold.co/600x900/555/fff?text=Error+al+cargar+página+' + i + '\'">';
+    }
+
+    pagesHtml += pageContentCascade;
     dropdownOptions += '<option value="' + i + '">Página ' + i + '</option>';
-    singlePageHTML += '<div id="single-page-' + i + '" class="lector-page-placeholder lector-page-single ' + (i === 1 ? 'active' : '') + '" style="height:650px;">' +
-      '<div style="text-align:center; padding-top:150px;">' +
-        '<div style="font-size:42px; margin-bottom:15px;">📖</div>' +
-        '<div style="font-weight:bold; font-size:16px;">' + manga.title + '</div>' +
-        '<div style="margin-top:5px; font-size:13px;">Capítulo ' + chapterNum + ' - Página ' + i + ' de ' + count + '</div>' +
-      '</div>' +
-    '</div>';
+    singlePageHTML += pageContentSingle;
   }
 
   var prevDisabled = chapterNum <= 1 ? ' disabled style="opacity:0.5"' : '';
@@ -642,7 +730,7 @@ function openReader(chapterNum) {
         '</div>' +
       '</div>' +
       '<div class="lector-pages" id="reader-pages-cascade" style="display:' + (state.readingMode === 'cascade' ? 'flex' : 'none') + '; flex-direction:column; align-items:center;">' + pagesHtml + '</div>' +
-      '<div class="lector-pages" id="reader-pages-single" style="display:' + (state.readingMode === 'single' ? 'block' : 'none') + ';">' +
+      '<div class="lector-pages" id="reader-pages-single" style="display:' + (state.readingMode === 'single' ? 'block' : 'none') + '; text-align:center;">' +
         singlePageHTML +
         '<div class="single-page-nav">' +
           '<button class="btn-page-nav" onclick="prevSinglePage()">← Anterior</button>' +
@@ -761,7 +849,12 @@ function jumpToPage(pageNum) {
 
 function updateSinglePageView() {
   document.querySelectorAll('.lector-page-single').forEach(function(p, idx) {
-    p.classList.toggle('active', (idx + 1) === state.currentPageIndex);
+    // Si es un lector de imagen real, el display se maneja de otra forma
+    if (p.tagName === 'IMG') {
+      p.style.display = (idx + 1) === state.currentPageIndex ? 'block' : 'none';
+    } else {
+      p.classList.toggle('active', (idx + 1) === state.currentPageIndex);
+    }
   });
   var dropdown = document.getElementById('page-select');
   if (dropdown) dropdown.value = state.currentPageIndex;
@@ -783,7 +876,7 @@ function handleReaderScroll() {
   if (state.readingMode !== 'cascade') return;
   var dropdown = document.getElementById('page-select');
   if (!dropdown) return;
-  document.querySelectorAll('#reader-pages-cascade .lector-page-placeholder').forEach(function(el, index) {
+  document.querySelectorAll('#reader-pages-cascade > div').forEach(function(el, index) {
     var rect = el.getBoundingClientRect();
     if (rect.top >= 0 && rect.top <= window.innerHeight / 2) {
       dropdown.value = index + 1;
@@ -818,6 +911,7 @@ function doUpload(e) {
   e.preventDefault();
 
   var title = document.getElementById('up-title').value.trim();
+  var coverInput = document.getElementById('up-cover').value.trim();
   var type = document.getElementById('up-type').value;
   var author = document.getElementById('up-author').value.trim() || "Anónimo";
   var genresInput = document.getElementById('up-genres').value.trim();

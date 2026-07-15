@@ -167,9 +167,9 @@ a:hover {
   color: #e74c3c;
 }
 
-.nav-link.text-red:hover {
+.nav-link.text-red:hover, .nav-link.text-red.active {
   background-color: #c0392b;
-  color: #ffffff;
+  color: #ffffff !important;
 }
 
 .btn-subir {
