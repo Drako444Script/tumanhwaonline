@@ -108,6 +108,28 @@
         </div>
       </div>
 
+      <!-- Panel de Más Vistos (Top Visitas) -->
+      <div class="panel">
+        <div class="panel-header">🔥 Los Más Vistos</div>
+        <div class="panel-body" style="padding: 5px 0;">
+          <ul class="sidebar-list" id="sidebar-top-views" style="list-style: none; padding: 0; margin: 0;">
+            <!-- Cargado por JS -->
+            <li style="padding: 8px 12px; color: #7f8c8d; font-size: 11px; text-align: center;">Cargando visitas...</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Panel de Recién Subidos (Últimas obras agregadas) -->
+      <div class="panel">
+        <div class="panel-header">✨ Recién Subidos</div>
+        <div class="panel-body" style="padding: 5px 0;">
+          <ul class="sidebar-list" id="sidebar-new-uploads" style="list-style: none; padding: 0; margin: 0;">
+            <!-- Cargado por JS -->
+            <li style="padding: 8px 12px; color: #7f8c8d; font-size: 11px; text-align: center;">Cargando catálogo...</li>
+          </ul>
+        </div>
+      </div>
+
       <!-- Disclaimer Latino antiguo -->
       <div class="panel disclaimer-panel">
         <div class="panel-header">Aviso Legal / DMCA</div>
@@ -197,7 +219,9 @@
             <input type="text" id="up-title" required placeholder="Ej: Solo Leveling">
           </div>
           <div class="form-group">
-            <label>URL de la Portada (Opcional):</label>
+            <label>Subir Imagen de Portada desde tu PC/Celular:</label>
+            <input type="file" id="up-cover-file" accept="image/*" style="margin-bottom: 5px;">
+            <span style="font-size: 11px; color: #7f8c8d; display: block; margin-bottom: 2px;">O pega un enlace de internet (URL):</span>
             <input type="url" id="up-cover" placeholder="Ej: https://i.imgur.com/TuImagen.jpg">
           </div>
           <div class="form-group">
@@ -257,8 +281,10 @@
             <input type="text" id="upch-scan" placeholder="Ej: CyberScan">
           </div>
           <div class="form-group">
-            <label>Páginas del Capítulo (URLs de imágenes, una por línea):</label>
-            <textarea id="upch-pages" rows="5" required placeholder="Pega los enlaces directos a las imágenes, uno por línea. Ej:&#10;https://i.imgur.com/pag1.jpg&#10;https://i.imgur.com/pag2.jpg"></textarea>
+            <label>Seleccionar Páginas desde tu PC/Celular (Múltiples Archivos):</label>
+            <input type="file" id="upch-files" accept="image/*" multiple style="margin-bottom: 5px;">
+            <span style="font-size: 11px; color: #7f8c8d; display: block; margin-bottom: 2px;">O pega enlaces de imágenes directos (uno por línea):</span>
+            <textarea id="upch-pages" rows="4" placeholder="https://i.imgur.com/pag1.jpg&#10;https://i.imgur.com/pag2.jpg"></textarea>
           </div>
           <button type="submit" class="btn-submit">Publicar Capítulo</button>
         </form>
@@ -438,6 +464,7 @@
   <!-- Toast (Notificaciones simples) -->
   <div class="toast-box" id="toast">Notificación</div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js"></script>
 </body>
 </html>

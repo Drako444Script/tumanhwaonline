@@ -1287,6 +1287,97 @@ a:hover {
   }
 }
 
+/* ── Inputs de Archivo (Subida desde PC/Celular) ── */
+input[type="file"] {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  border: 2px dashed #bdc3c7;
+  border-radius: 4px;
+  background-color: #f9f9f9;
+  font-size: 12px;
+  color: #555;
+  cursor: pointer;
+  box-sizing: border-box;
+}
 
+input[type="file"]:hover {
+  border-color: #c0392b;
+  background-color: #fdf3f3;
+}
 
+/* ── Barra de progreso de subida de capítulo ── */
+.upload-progress-bar-wrap {
+  background: #eaeded;
+  border: 1px solid #d6dbdf;
+  border-radius: 4px;
+  height: 16px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+.upload-progress-bar {
+  height: 100%;
+  background: #27ae60;
+  width: 0%;
+  transition: width 0.2s;
+}
+
+/* ── Avatar de Perfil como Imagen ── */
+#profile-avatar-img {
+  border: 3px solid #2c3e50;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+/* ── Estilos de listas laterales de estadísticas ── */
+.sidebar-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid #eaeded;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  font-size: 12px;
+}
+
+.sidebar-item:last-child {
+  border-bottom: none;
+}
+
+.sidebar-item:hover {
+  background-color: #fcfcfc;
+}
+
+.sidebar-item:hover .sidebar-item-title {
+  color: #c0392b;
+}
+
+.sidebar-item-num {
+  font-weight: bold;
+  font-size: 13px;
+  color: #7f8c8d;
+  width: 20px;
+}
+
+.sidebar-item-title {
+  flex: 1;
+  color: #34495e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 5px;
+}
+
+.sidebar-item-meta {
+  font-size: 10px;
+  color: #95a5a6;
+  background-color: #f2f4f4;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-weight: bold;
+}
 

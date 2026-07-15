@@ -1,12 +1,17 @@
 /* ═══════════════════════════════════════════
-   TUMANHWAONLINE — Lógica del Portal (Sin Base de Datos Externa)
-   Todo se guarda en localStorage del navegador del usuario.
+   TUMANHWAONLINE — Lógica del Portal con Supabase
+   Sincronizado en tiempo real. Hosting en Netlify.
    ═══════════════════════════════════════════ */
 
-// ── Catálogo Inicial (Vacío para empezar de cero) ──
-const DEFAULT_MANGAS = [];
+// ── Credenciales de Supabase ──
+const SUPABASE_URL = "https://uwentmslkkroivlajvsx.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_jt6pSgz6HtR6Xi0Kxt0IDQ_V51NFbhL"; 
 
-const DEFAULT_COMMENTS = {};
+// Inicializar cliente de Supabase
+let supabase = null;
+if (typeof window.supabase !== 'undefined' && SUPABASE_ANON_KEY !== "TU_SUPABASE_ANON_KEY") {
+  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
 
 // ── Estado Global ──
 const state = {
@@ -29,33 +34,83 @@ const state = {
   sortOrder: 'desc'
 };
 
-// ── Cargar datos desde localStorage ──
-function loadState() {
+// ── Cargar datos del sistema ──
+async function loadState() {
   try {
     state.currentUser = JSON.parse(localStorage.getItem('tm-user')) || null;
     state.readChapters = JSON.parse(localStorage.getItem('tm-read')) || {};
     state.library = JSON.parse(localStorage.getItem('tm-library')) || {};
     state.history = JSON.parse(localStorage.getItem('tm-history')) || [];
-    state.comments = JSON.parse(localStorage.getItem('tm-comments')) || {};
 
-    var savedCatalog = localStorage.getItem('tm-catalog');
-    
-    // Si contiene mangas viejos de prueba, limpiamos la memoria caché
-    if (savedCatalog && savedCatalog.indexOf('Blade of the Forsaken') !== -1) {
-      localStorage.removeItem('tm-catalog');
-      savedCatalog = null;
-    }
-
-    if (savedCatalog) {
-      state.catalog = JSON.parse(savedCatalog);
+    // Si Supabase está configurado, cargamos en tiempo real
+    if (supabase) {
+      await syncWithSupabase();
     } else {
-      state.catalog = [];
-      localStorage.setItem('tm-catalog', JSON.stringify(state.catalog));
+      // Respaldo offline (LocalStorage)
+      var savedCatalog = localStorage.getItem('tm-catalog');
+      state.comments = JSON.parse(localStorage.getItem('tm-comments')) || {};
+      if (savedCatalog) {
+        state.catalog = JSON.parse(savedCatalog);
+      } else {
+        state.catalog = [];
+      }
+      updateStats();
+      renderFeatured();
+      renderGenres();
+      renderGrid();
+      renderSidebarStats();
     }
   } catch (e) {
-    console.warn("Error cargando localStorage, usando datos por defecto:", e);
+    console.warn("Error inicializando estados:", e);
     state.catalog = [];
     state.comments = {};
+  }
+}
+
+// Sincronizar catálogo y vistas en tiempo real con Supabase
+async function syncWithSupabase() {
+  if (!supabase) return;
+  try {
+    // 1. Obtener catálogo completo
+    let { data: dbCatalog, error: catError } = await supabase
+      .from('catalog')
+      .select('*')
+      .order('id', { ascending: false });
+
+    if (catError) throw catError;
+
+    // Adaptar nombres de campos de BD a JS
+    state.catalog = (dbCatalog || []).map(item => {
+      return {
+        id: item.id,
+        title: item.title,
+        type: item.type,
+        author: item.author,
+        cover: item.cover,
+        rating: parseFloat(item.rating || 5.0),
+        chapters: parseInt(item.chapters || 0),
+        chaptersData: item.chapters_data || {},
+        status: item.status,
+        views: parseInt(item.views || 0),
+        genres: item.genres || [],
+        description: item.description,
+        year: item.year,
+        uploader: item.uploader,
+        lang: item.lang,
+        nsfw: item.nsfw
+      };
+    });
+
+    // Guardar copia local de respaldo
+    localStorage.setItem('tm-catalog', JSON.stringify(state.catalog));
+
+    updateStats();
+    renderFeatured();
+    renderGenres();
+    renderGrid();
+    renderSidebarStats();
+  } catch (err) {
+    console.error("Error sincronizando catálogo con Supabase:", err);
   }
 }
 
@@ -159,13 +214,14 @@ function openProfileModal() {
     totalRead += state.readChapters[key].length;
   });
 
-  const libSize = Object.keys(state.library).length;
-  const userUploads = state.catalog.filter(function(m) { return m.uploader === state.currentUser.username; }).length;
+  var libSize = Object.keys(state.library).length;
+  var userUploads = state.catalog.filter(function(m) { return m.uploader === state.currentUser.username; }).length;
 
+  // Mostrar avatar como imagen o como letra
   var avatarImg = document.getElementById('profile-avatar-img');
   var avatarDiv = document.getElementById('profile-avatar');
-  
-  if (state.currentUser.avatar && state.currentUser.avatar.trim() !== "") {
+
+  if (state.currentUser.avatar && state.currentUser.avatar.trim() !== '') {
     avatarImg.src = state.currentUser.avatar;
     avatarImg.style.display = 'block';
     avatarDiv.style.display = 'none';
@@ -175,11 +231,17 @@ function openProfileModal() {
     avatarDiv.textContent = state.currentUser.username[0].toUpperCase();
   }
 
+  // Info del usuario
   document.getElementById('profile-username').textContent = state.currentUser.username;
   document.getElementById('profile-email').textContent = state.currentUser.email;
-  document.getElementById('profile-bio-text').textContent = state.currentUser.bio || "Sin biografía.";
+  document.getElementById('profile-bio-text').textContent = state.currentUser.bio || 'Sin biografía.';
 
-  // Rellenar formulario de edición
+  // Estadísticas
+  document.getElementById('profile-stat-read').textContent = totalRead;
+  document.getElementById('profile-stat-library').textContent = libSize;
+  document.getElementById('profile-stat-uploads').textContent = userUploads;
+
+  // Pre-llenar formulario de edición
   document.getElementById('prof-display-name').value = state.currentUser.username;
   document.getElementById('prof-avatar-url').value = state.currentUser.avatar || '';
   document.getElementById('prof-bio').value = state.currentUser.bio || '';
@@ -459,7 +521,7 @@ function renderGrid() {
 // ══════════════════════════════════════════════
 // ── VISTA DETALLE ──
 // ══════════════════════════════════════════════
-function showDetail(id) {
+async function showDetail(id) {
   const manga = state.catalog.find(m => m.id === id);
   if (!manga) return;
 
@@ -481,6 +543,16 @@ function showDetail(id) {
 
   var libSection = state.library[manga.id];
 
+  // 1. Incrementar visitas en Supabase (en segundo plano)
+  incrementMangaViews(manga);
+
+  // Armar estrellas del rating
+  var starsHtml = '';
+  for (var s = 1; s <= 5; s++) {
+    var activeStar = s <= Math.round(manga.rating || 5.0) ? '★' : '☆';
+    starsHtml += '<span class="star-rating-btn" onclick="submitMangaRating(' + manga.id + ', ' + s + ')">' + activeStar + '</span>';
+  }
+
   detailView.innerHTML =
     '<div class="manga-detail">' +
       '<button class="btn-classic-grey back-btn" style="margin-bottom:15px;" onclick="goHome()">← Volver al listado</button>' +
@@ -496,7 +568,9 @@ function showDetail(id) {
             '<tr><td>Géneros:</td><td>' + manga.genres.join(', ') + '</td></tr>' +
             '<tr><td>Subido por:</td><td>' + manga.uploader + '</td></tr>' +
             '<tr><td>Biblioteca:</td><td>' + (libSection ? 'Guardado en: <strong>' + libSection.toUpperCase() + '</strong>' : 'No guardado') + '</td></tr>' +
-            '<tr><td>Valoración:</td><td>★ ' + manga.rating + ' / 5</td></tr>' +
+            '<tr><td>Visitas totales:</td><td>🔥 ' + (manga.views || 0).toLocaleString() + ' vistas</td></tr>' +
+            '<tr><td>Calificación:</td><td>★ ' + (manga.rating || 5.0).toFixed(1) + ' / 5.0</td></tr>' +
+            '<tr><td>Puntuar obra:</td><td><div class="star-rating-wrap">' + starsHtml + '</div></td></tr>' +
           '</table>' +
           '<div class="detail-actions">' +
             '<button class="btn-classic-red" onclick="startReading()">Leer Primer Capítulo</button>' +
@@ -536,6 +610,49 @@ function showDetail(id) {
 
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
+// Registrar incremento de visitas en Supabase
+async function incrementMangaViews(manga) {
+  manga.views = (parseInt(manga.views) || 0) + 1;
+  renderSidebarStats(); // Actualizar barra lateral inmediatamente en pantalla
+  if (supabase) {
+    try {
+      await supabase
+        .from('catalog')
+        .update({ views: manga.views })
+        .eq('id', manga.id);
+    } catch (err) {
+      console.warn("No se pudo registrar la visita en Supabase:", err);
+    }
+  }
+}
+
+// Valorar una obra en estrellas
+async function submitMangaRating(mangaId, stars) {
+  var manga = state.catalog.find(m => m.id === mangaId);
+  if (!manga) return;
+
+  // Promedio básico de calificación
+  var currentRating = parseFloat(manga.rating || 5.0);
+  var newRating = ((currentRating * 9) + parseFloat(stars)) / 10; // Suavizado de rating
+  manga.rating = newRating;
+
+  showToast("¡Has calificado esta obra con " + stars + " estrellas!");
+  showDetail(mangaId); // Recargar panel de detalles
+
+  if (supabase) {
+    try {
+      await supabase
+        .from('catalog')
+        .update({ rating: newRating })
+        .eq('id', mangaId);
+      await syncWithSupabase();
+    } catch (err) {
+      console.warn("No se pudo guardar la calificación en Supabase:", err);
+    }
+  }
+}
+
 
 function startReading() {
   if (state.selectedManga) {
@@ -589,11 +706,29 @@ function saveToLibrarySection() {
 // ══════════════════════════════════════════════
 // ── COMENTARIOS ──
 // ══════════════════════════════════════════════
-function renderCommentsList(mangaId) {
+async function renderCommentsList(mangaId) {
   var container = document.getElementById('comments-list');
   if (!container) return;
 
-  var list = state.comments[mangaId] || [];
+  var list = [];
+  if (supabase) {
+    try {
+      let { data, error } = await supabase
+        .from('comments')
+        .select('*')
+        .eq('manga_id', String(mangaId))
+        .order('id', { ascending: false });
+
+      if (error) throw error;
+      list = data || [];
+    } catch (err) {
+      console.warn("Error cargando comentarios de Supabase, usando locales:", err);
+      list = state.comments[mangaId] || [];
+    }
+  } else {
+    list = state.comments[mangaId] || [];
+  }
+
   if (list.length === 0) {
     container.innerHTML = '<div style="text-align:center; color:#95a5a6; padding:15px; font-size:12px;">No hay comentarios todavía. ¡Sé el primero en comentar!</div>';
     return;
@@ -603,14 +738,14 @@ function renderCommentsList(mangaId) {
     '<div class="comment-item">' +
       '<div class="comment-meta">' +
         '<span class="comment-author ' + (c.is_staff ? 'uploader-author' : '') + '">' + c.author + (c.is_staff ? ' [Traductor]' : '') + '</span>' +
-        '<span>' + c.date + '</span>' +
+        '<span>' + (c.date || 'Hace un momento') + '</span>' +
       '</div>' +
       '<div class="comment-content">' + c.text + '</div>' +
     '</div>'
   ).join('');
 }
 
-function addComment(mangaId) {
+async function addComment(mangaId) {
   var textInput = document.getElementById('comment-text');
   if (!textInput) return;
   var text = textInput.value.trim();
@@ -619,12 +754,39 @@ function addComment(mangaId) {
   var author = state.currentUser ? state.currentUser.username : "Anónimo";
   var isStaff = state.selectedManga && state.selectedManga.uploader === author;
 
+  if (supabase) {
+    try {
+      let { error } = await supabase
+        .from('comments')
+        .insert([{
+          manga_id: String(mangaId),
+          author: author,
+          text: text,
+          date: 'Ahora mismo',
+          is_staff: isStaff
+        }]);
+
+      if (error) throw error;
+      textInput.value = '';
+      await renderCommentsList(mangaId);
+      showToast("Comentario enviado.");
+    } catch (err) {
+      console.warn("No se pudo guardar comentario en Supabase:", err);
+      saveCommentLocalFallback(mangaId, author, text, isStaff);
+    }
+  } else {
+    saveCommentLocalFallback(mangaId, author, text, isStaff);
+  }
+}
+
+function saveCommentLocalFallback(mangaId, author, text, isStaff) {
+  var textInput = document.getElementById('comment-text');
   if (!state.comments[mangaId]) state.comments[mangaId] = [];
   state.comments[mangaId].unshift({ author: author, text: text, date: "Ahora mismo", is_staff: isStaff });
   saveState();
-  textInput.value = '';
+  if (textInput) textInput.value = '';
   renderCommentsList(mangaId);
-  showToast("Comentario enviado.");
+  showToast("Comentario guardado localmente.");
 }
 
 // ══════════════════════════════════════════════
@@ -697,7 +859,6 @@ function openReader(chapterNum) {
         '</div>' +
       '</div>';
     } else {
-      // Usar imágenes reales subidas por el usuario
       pageContentCascade = '<div id="page-' + i + '" class="lector-page-real" style="text-align:center; margin-bottom:12px;">' +
         '<img src="' + pageUrl + '" alt="Página ' + i + '" style="max-width:100%; height:auto; display:block; margin:0 auto; border: 1px solid #ddd;" onerror="this.src=\'https://placehold.co/600x900/555/fff?text=Error+al+cargar+página+' + i + '\'">' +
       '</div>';
@@ -771,12 +932,30 @@ function openReader(chapterNum) {
 }
 
 // ── Comentarios del Lector ──
-function renderReaderCommentsList(mangaId, chapterNum) {
+async function renderReaderCommentsList(mangaId, chapterNum) {
   var container = document.getElementById('reader-comments-list');
   if (!container) return;
 
   var key = mangaId + '_' + chapterNum;
-  var list = state.comments[key] || [];
+  var list = [];
+
+  if (supabase) {
+    try {
+      let { data, error } = await supabase
+        .from('comments')
+        .select('*')
+        .eq('manga_id', key)
+        .order('id', { ascending: false });
+
+      if (error) throw error;
+      list = data || [];
+    } catch (err) {
+      console.warn("Error cargando comentarios del capítulo de Supabase:", err);
+      list = state.comments[key] || [];
+    }
+  } else {
+    list = state.comments[key] || [];
+  }
 
   if (list.length === 0) {
     container.innerHTML = '<div style="text-align:center; color:#888; padding:15px; font-size:11px;">Nadie ha comentado en este capítulo. ¡Sé el primero!</div>';
@@ -787,14 +966,14 @@ function renderReaderCommentsList(mangaId, chapterNum) {
     '<div class="lector-comment-item">' +
       '<div class="lector-comment-meta">' +
         '<span class="lector-comment-author ' + (c.is_staff ? 'uploader-author' : '') + '">' + c.author + (c.is_staff ? ' [Traductor]' : '') + '</span>' +
-        '<span>' + c.date + '</span>' +
+        '<span>' + (c.date || 'Hace un momento') + '</span>' +
       '</div>' +
       '<div class="lector-comment-content">' + c.text + '</div>' +
     '</div>'
   ).join('');
 }
 
-function addReaderComment(mangaId, chapterNum) {
+async function addReaderComment(mangaId, chapterNum) {
   if (!state.currentUser) { showToast("Debes iniciar sesión para comentar."); return; }
 
   var textInput = document.getElementById('reader-comment-text');
@@ -806,12 +985,39 @@ function addReaderComment(mangaId, chapterNum) {
   var author = state.currentUser.username;
   var isStaff = state.selectedManga && state.selectedManga.uploader === author;
 
+  if (supabase) {
+    try {
+      let { error } = await supabase
+        .from('comments')
+        .insert([{
+          manga_id: key,
+          author: author,
+          text: text,
+          date: 'Ahora mismo',
+          is_staff: isStaff
+        }]);
+
+      if (error) throw error;
+      textInput.value = '';
+      await renderReaderCommentsList(mangaId, chapterNum);
+      showToast("Comentario publicado.");
+    } catch (err) {
+      console.warn("No se pudo subir el comentario del lector a Supabase:", err);
+      saveReaderCommentLocalFallback(key, author, text, isStaff);
+    }
+  } else {
+    saveReaderCommentLocalFallback(key, author, text, isStaff);
+  }
+}
+
+function saveReaderCommentLocalFallback(key, author, text, isStaff) {
+  var textInput = document.getElementById('reader-comment-text');
   if (!state.comments[key]) state.comments[key] = [];
   state.comments[key].unshift({ author: author, text: text, date: "Ahora mismo", is_staff: isStaff });
   saveState();
-  textInput.value = '';
-  renderReaderCommentsList(mangaId, chapterNum);
-  showToast("Comentario publicado.");
+  if (textInput) textInput.value = '';
+  renderReaderCommentsList(state.selectedManga.id, state.currentChapter);
+  showToast("Comentario guardado localmente.");
 }
 
 // ── Modos de lectura ──
@@ -907,50 +1113,93 @@ function openUploadModal() {
   openModal('upload-modal');
 }
 
-function doUpload(e) {
+async function doUpload(e) {
   e.preventDefault();
 
   var title = document.getElementById('up-title').value.trim();
   var coverInput = document.getElementById('up-cover').value.trim();
+  var fileInput = document.getElementById('up-cover-file');
   var type = document.getElementById('up-type').value;
   var author = document.getElementById('up-author').value.trim() || "Anónimo";
   var genresInput = document.getElementById('up-genres').value.trim();
   var description = document.getElementById('up-desc').value.trim() || "Sin descripción.";
   var nsfw = document.getElementById('up-nsfw').checked;
   var genres = genresInput ? genresInput.split(',').map(function(g) { return g.trim(); }) : ["General"];
-
-  var colors = ['2c3e50', '8e44ad', '27ae60', 'e74c3c', '34495e', 'f39c12', 'c0392b', 'd35400', '16a085', '2980b9'];
-  var randomColor = colors[Math.floor(Math.random() * colors.length)];
-  var coverUrl = 'https://placehold.co/300x420/' + randomColor + '/ffffff?text=' + encodeURIComponent(title.substring(0, 20));
   var uploaderName = state.currentUser ? state.currentUser.username : "Anónimo";
 
-  var newManga = {
-    id: Date.now(),
-    title: title,
-    type: type,
-    author: author,
-    cover: coverUrl,
-    rating: 5.0,
-    chapters: 1,
-    status: "En emisión",
-    views: "100",
-    genres: genres,
-    description: description,
-    year: new Date().getFullYear(),
-    uploader: uploaderName,
-    lang: "ES",
-    nsfw: nsfw
-  };
+  async function saveManga(finalCover) {
+    var newManga = {
+      title: title,
+      type: type,
+      author: author,
+      cover: finalCover,
+      rating: 5.0,
+      chapters: 0,
+      chapters_data: {},
+      status: "En emisión",
+      views: 0,
+      genres: genres,
+      description: description,
+      year: new Date().getFullYear(),
+      uploader: uploaderName,
+      lang: "ES",
+      nsfw: nsfw
+    };
 
-  state.catalog.unshift(newManga);
-  saveState();
-  closeModal('upload-modal');
-  e.target.reset();
-  updateStats();
-  renderGenres();
-  renderFeatured();
-  renderGrid();
-  showToast('¡"' + title + '" publicado con éxito!');
+    if (supabase) {
+      showToast("Publicando en la base de datos en tiempo real...");
+      try {
+        let { data, error } = await supabase
+          .from('catalog')
+          .insert([newManga])
+          .select();
+        
+        if (error) throw error;
+        showToast('¡"' + title + '" publicado en tiempo real con éxito!');
+        await syncWithSupabase();
+      } catch (err) {
+        console.error("Error al subir a Supabase:", err);
+        showToast("Error de conexión. Se guardó localmente.");
+        saveLocalFallback(newManga);
+      }
+    } else {
+      saveLocalFallback(newManga);
+    }
+
+    closeModal('upload-modal');
+    e.target.reset();
+  }
+
+  function saveLocalFallback(newManga) {
+    newManga.id = Date.now();
+    newManga.chaptersData = {};
+    newManga.views = "100";
+    state.catalog.unshift(newManga);
+    saveState();
+    updateStats();
+    renderGenres();
+    renderFeatured();
+    renderGrid();
+    renderSidebarStats();
+    showToast('¡"' + title + '" publicado localmente con éxito!');
+  }
+
+  // Si el usuario subió un archivo local
+  if (fileInput.files && fileInput.files[0]) {
+    var reader = new FileReader();
+    reader.onload = async function(evt) {
+      await saveManga(evt.target.result);
+    };
+    reader.readAsDataURL(fileInput.files[0]);
+  } else {
+    var coverUrl = coverInput;
+    if (!coverUrl) {
+      var colors = ['2c3e50', '8e44ad', '27ae60', 'e74c3c', '34495e', 'f39c12', 'c0392b', 'd35400', '16a085', '2980b9'];
+      var randomColor = colors[Math.floor(Math.random() * colors.length)];
+      coverUrl = 'https://placehold.co/300x420/' + randomColor + '/ffffff?text=' + encodeURIComponent(title.substring(0, 20));
+    }
+    await saveManga(coverUrl);
+  }
 }
 
 // ── Subir Capítulo ──
@@ -960,24 +1209,104 @@ function openUploadChapterModal() {
   openModal('upload-chapter-modal');
 }
 
-function doUploadChapter(e) {
+async function doUploadChapter(e) {
   e.preventDefault();
   if (!state.selectedManga) return;
 
   var num = parseInt(document.getElementById('upch-num').value);
+  var pagesText = document.getElementById('upch-pages').value.trim();
+  var fileInput = document.getElementById('upch-files');
+  
   var manga = state.catalog.find(function(m) { return m.id === state.selectedManga.id; });
   if (!manga) return;
 
-  if (num > manga.chapters) manga.chapters = num;
-  else manga.chapters++;
+  async function saveChapter(pagesArray) {
+    if (pagesArray.length === 0) {
+      showToast("Debes ingresar al menos una página (archivo o enlace).");
+      return;
+    }
 
-  state.selectedManga = manga;
-  saveState();
-  closeModal('upload-chapter-modal');
-  e.target.reset();
-  showDetail(manga.id);
-  updateStats();
-  showToast('¡Capítulo ' + num + ' publicado exitosamente!');
+    if (supabase) {
+      showToast("Guardando capítulo en base de datos...");
+      try {
+        var updatedChaptersData = manga.chaptersData || {};
+        updatedChaptersData[num] = pagesArray;
+
+        var totalChapters = manga.chapters;
+        if (num > totalChapters) {
+          totalChapters = num;
+        }
+
+        let { error } = await supabase
+          .from('catalog')
+          .update({ 
+            chapters: totalChapters, 
+            chapters_data: updatedChaptersData 
+          })
+          .eq('id', manga.id);
+
+        if (error) throw error;
+        showToast('¡Capítulo ' + num + ' publicado en tiempo real con éxito!');
+        await syncWithSupabase();
+        
+        // Volver a cargar vista de detalle
+        showDetail(manga.id);
+      } catch (err) {
+        console.error("Error subiendo capítulo a Supabase:", err);
+        showToast("Error. Guardado en caché local.");
+        saveChapterLocalFallback(pagesArray);
+      }
+    } else {
+      saveChapterLocalFallback(pagesArray);
+    }
+
+    closeModal('upload-chapter-modal');
+    e.target.reset();
+  }
+
+  function saveChapterLocalFallback(pagesArray) {
+    if (!manga.chaptersData) manga.chaptersData = {};
+    manga.chaptersData[num] = pagesArray;
+
+    if (num > manga.chapters) {
+      manga.chapters = num;
+    }
+
+    state.selectedManga = manga;
+    saveState();
+    showDetail(manga.id);
+    updateStats();
+    renderSidebarStats();
+  }
+
+  var pagesList = [];
+  if (pagesText) {
+    pagesList = pagesText.split('\n').map(function(line) { return line.trim(); }).filter(function(line) { return line !== ""; });
+  }
+
+  // Si el usuario seleccionó archivos locales para las páginas
+  if (fileInput.files && fileInput.files.length > 0) {
+    var files = fileInput.files;
+    var loaded = 0;
+    
+    showToast("Procesando imágenes locales, por favor espera...");
+    
+    for (var i = 0; i < files.length; i++) {
+      (function(file) {
+        var reader = new FileReader();
+        reader.onload = async function(evt) {
+          pagesList.push(evt.target.result);
+          loaded++;
+          if (loaded === files.length) {
+            await saveChapter(pagesList);
+          }
+        };
+        reader.readAsDataURL(file);
+      })(files[i]);
+    }
+  } else {
+    await saveChapter(pagesList);
+  }
 }
 
 // ══════════════════════════════════════════════
@@ -1081,6 +1410,55 @@ function updateStats() {
   if (el1) el1.textContent = titles;
   if (el2) el2.textContent = chapters.toLocaleString();
   if (el3) el3.textContent = Object.keys(contributors).length;
+}
+
+// ── Render de listas de la Barra Lateral (Sidebar) ──
+function renderSidebarStats() {
+  var topViewsContainer = document.getElementById('sidebar-top-views');
+  var newUploadsContainer = document.getElementById('sidebar-new-uploads');
+  if (!topViewsContainer || !newUploadsContainer) return;
+
+  var catalogCopy = state.catalog.slice();
+
+  // 1. Los Más Vistos (Top Visitas)
+  var topViews = catalogCopy.sort(function(a, b) {
+    return (b.views || 0) - (a.views || 0);
+  }).slice(0, 5);
+
+  if (topViews.length === 0) {
+    topViewsContainer.innerHTML = '<li style="padding: 10px 12px; color: #7f8c8d; font-size: 11px; text-align: center;">Sin registros.</li>';
+  } else {
+    topViewsContainer.innerHTML = topViews.map(function(m, index) {
+      return '<li class="sidebar-item" onclick="showDetail(' + m.id + ')">' +
+        '<span class="sidebar-item-num">' + (index + 1) + '</span>' +
+        '<span class="sidebar-item-title">' + m.title + '</span>' +
+        '<span class="sidebar-item-meta">' + formatViews(m.views) + '</span>' +
+      '</li>';
+    }).join('');
+  }
+
+  // 2. Recién Subidos (Últimos agregados por ID / fecha)
+  var newUploads = state.catalog.slice().sort(function(a, b) {
+    return b.id - a.id; // El ID es Date.now() en subidas locales/nuevas
+  }).slice(0, 5);
+
+  if (newUploads.length === 0) {
+    newUploadsContainer.innerHTML = '<li style="padding: 10px 12px; color: #7f8c8d; font-size: 11px; text-align: center;">Sin registros.</li>';
+  } else {
+    newUploadsContainer.innerHTML = newUploads.map(function(m) {
+      return '<li class="sidebar-item" onclick="showDetail(' + m.id + ')">' +
+        '<span class="sidebar-item-title">' + m.title + '</span>' +
+        '<span class="sidebar-item-meta" style="background-color:#e8f8f5; color:#117a65;">' + m.type.toUpperCase() + '</span>' +
+      '</li>';
+    }).join('');
+  }
+}
+
+function formatViews(views) {
+  var v = parseInt(views || 0);
+  if (v >= 1000000) return (v / 1000000).toFixed(1) + 'M';
+  if (v >= 1000) return (v / 1000).toFixed(1) + 'K';
+  return v + ' vis';
 }
 
 function showToast(msg) {
