@@ -5,7 +5,7 @@
 
 // ── Credenciales de Supabase ──
 const SUPABASE_URL = "https://uwentmslkkroivlajvsx.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_jt6pSgz6HtR6Xi0Kxt0IDQ_V51NFbhL"; 
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV3ZW50bXNsa2tyb2l2bGFqdnN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxNTAzOTIsImV4cCI6MjA5OTcyNjM5Mn0.H5DdP_FtbWuUF2t52PzHAHA76WNdpWwuqK0QTvBbUyg"; 
 
 // Inicializar cliente de Supabase
 let supabase = null;
@@ -35,6 +35,7 @@ const state = {
 };
 
 // ── Cargar datos del sistema ──
+// ── Cargar datos del sistema ──
 async function loadState() {
   try {
     state.currentUser = JSON.parse(localStorage.getItem('tm-user')) || null;
@@ -42,42 +43,53 @@ async function loadState() {
     state.library = JSON.parse(localStorage.getItem('tm-library')) || {};
     state.history = JSON.parse(localStorage.getItem('tm-history')) || [];
 
-    // Si Supabase está configurado, cargamos en tiempo real
+    // Si Supabase está configurado, cargamos en tiempo real con recuperación local en caso de error
     if (supabase) {
       await syncWithSupabase();
     } else {
-      // Respaldo offline (LocalStorage)
-      var savedCatalog = localStorage.getItem('tm-catalog');
-      state.comments = JSON.parse(localStorage.getItem('tm-comments')) || {};
-      if (savedCatalog) {
-        state.catalog = JSON.parse(savedCatalog);
-      } else {
-        state.catalog = [];
-      }
-      updateStats();
-      renderFeatured();
-      renderGenres();
-      renderGrid();
-      renderSidebarStats();
+      loadLocalFallbackData();
     }
   } catch (e) {
     console.warn("Error inicializando estados:", e);
-    state.catalog = [];
-    state.comments = {};
+    loadLocalFallbackData();
   }
+}
+
+// Cargar desde almacenamiento local del navegador (Caché local/Offline)
+function loadLocalFallbackData() {
+  console.log("Cargando base de datos local (localStorage)...");
+  var savedCatalog = localStorage.getItem('tm-catalog');
+  state.comments = JSON.parse(localStorage.getItem('tm-comments')) || {};
+  if (savedCatalog) {
+    state.catalog = JSON.parse(savedCatalog);
+  } else {
+    state.catalog = [];
+  }
+  
+  // Renderizar la interfaz para que todo funcione
+  updateStats();
+  renderFeatured();
+  renderGenres();
+  renderGrid();
+  renderSidebarStats();
 }
 
 // Sincronizar catálogo y vistas en tiempo real con Supabase
 async function syncWithSupabase() {
-  if (!supabase) return;
+  if (!supabase) {
+    loadLocalFallbackData();
+    return;
+  }
   try {
-    // 1. Obtener catálogo completo
+    // Intentar obtener el catálogo de Supabase
     let { data: dbCatalog, error: catError } = await supabase
       .from('catalog')
       .select('*')
       .order('id', { ascending: false });
 
-    if (catError) throw catError;
+    if (catError) {
+      throw catError;
+    }
 
     // Adaptar nombres de campos de BD a JS
     state.catalog = (dbCatalog || []).map(item => {
@@ -110,7 +122,8 @@ async function syncWithSupabase() {
     renderGrid();
     renderSidebarStats();
   } catch (err) {
-    console.error("Error sincronizando catálogo con Supabase:", err);
+    console.warn("Fallo la sincronización con Supabase (posible clave inválida o tablas no creadas). Usando base de datos local de respaldo.", err);
+    loadLocalFallbackData();
   }
 }
 
