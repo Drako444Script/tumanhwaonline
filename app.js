@@ -29,10 +29,10 @@ const SUPABASE_URL = "https://uwentmslkkroivlajvsx.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV3ZW50bXNsa2tyb2l2bGFqdnN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxNTAzOTIsImV4cCI6MjA5OTcyNjM5Mn0.H5DdP_FtbWuUF2t52PzHAHA76WNdpWwuqK0QTvBbUyg"; 
 
 // Inicializar cliente de Supabase de forma segura
-let supabase = null;
+let supabaseClient = null;
 try {
   if (typeof window.supabase !== 'undefined' && SUPABASE_ANON_KEY !== "TU_SUPABASE_ANON_KEY") {
-    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   }
 } catch (err) {
   console.warn("No se pudo inicializar Supabase, trabajando en modo local:", err);
@@ -91,7 +91,7 @@ async function loadState() {
     }
 
     // Si Supabase está configurado, cargamos en tiempo real con recuperación local en caso de error
-    if (supabase) {
+    if (supabaseClient) {
       await syncWithSupabase();
     } else {
       loadLocalFallbackData();
@@ -139,13 +139,13 @@ function loadLocalFallbackData() {
 
 // Sincronizar catálogo y vistas en tiempo real con Supabase
 async function syncWithSupabase() {
-  if (!supabase) {
+  if (!supabaseClient) {
     loadLocalFallbackData();
     return;
   }
   try {
     // Intentar obtener el catálogo de Supabase
-    let { data: dbCatalog, error: catError } = await supabase
+    let { data: dbCatalog, error: catError } = await supabaseClient
       .from('catalog')
       .select('*')
       .order('id', { ascending: false });
@@ -698,9 +698,9 @@ async function showDetail(id) {
 async function incrementMangaViews(manga) {
   manga.views = (parseInt(manga.views) || 0) + 1;
   renderSidebarStats(); // Actualizar barra lateral inmediatamente en pantalla
-  if (supabase) {
+  if (supabaseClient) {
     try {
-      await supabase
+      await supabaseClient
         .from('catalog')
         .update({ views: manga.views })
         .eq('id', manga.id);
@@ -723,9 +723,9 @@ async function submitMangaRating(mangaId, stars) {
   showToast("¡Has calificado esta obra con " + stars + " estrellas!");
   showDetail(mangaId); // Recargar panel de detalles
 
-  if (supabase) {
+  if (supabaseClient) {
     try {
-      await supabase
+      await supabaseClient
         .from('catalog')
         .update({ rating: newRating })
         .eq('id', mangaId);
@@ -794,9 +794,9 @@ async function renderCommentsList(mangaId) {
   if (!container) return;
 
   var list = [];
-  if (supabase) {
+  if (supabaseClient) {
     try {
-      let { data, error } = await supabase
+      let { data, error } = await supabaseClient
         .from('comments')
         .select('*')
         .eq('manga_id', String(mangaId))
@@ -837,9 +837,9 @@ async function addComment(mangaId) {
   var author = state.currentUser ? state.currentUser.username : "Anónimo";
   var isStaff = state.selectedManga && state.selectedManga.uploader === author;
 
-  if (supabase) {
+  if (supabaseClient) {
     try {
-      let { error } = await supabase
+      let { error } = await supabaseClient
         .from('comments')
         .insert([{
           manga_id: String(mangaId),
@@ -1022,9 +1022,9 @@ async function renderReaderCommentsList(mangaId, chapterNum) {
   var key = mangaId + '_' + chapterNum;
   var list = [];
 
-  if (supabase) {
+  if (supabaseClient) {
     try {
-      let { data, error } = await supabase
+      let { data, error } = await supabaseClient
         .from('comments')
         .select('*')
         .eq('manga_id', key)
@@ -1068,9 +1068,9 @@ async function addReaderComment(mangaId, chapterNum) {
   var author = state.currentUser.username;
   var isStaff = state.selectedManga && state.selectedManga.uploader === author;
 
-  if (supabase) {
+  if (supabaseClient) {
     try {
-      let { error } = await supabase
+      let { error } = await supabaseClient
         .from('comments')
         .insert([{
           manga_id: key,
@@ -1229,10 +1229,10 @@ async function doUpload(e) {
       nsfw: nsfw
     };
 
-    if (supabase) {
+    if (supabaseClient) {
       showToast("Publicando en la base de datos en tiempo real...");
       try {
-        let { data, error } = await supabase
+        let { data, error } = await supabaseClient
           .from('catalog')
           .insert([newManga])
           .select();
@@ -1425,7 +1425,7 @@ async function doUploadChapter(e) {
       return;
     }
 
-    if (supabase) {
+    if (supabaseClient) {
       showToast("Guardando capítulo en base de datos...");
       try {
         var updatedChaptersData = manga.chaptersData || {};
@@ -1436,7 +1436,7 @@ async function doUploadChapter(e) {
           totalChapters = num;
         }
 
-        let { error } = await supabase
+        let { error } = await supabaseClient
           .from('catalog')
           .update({ 
             chapters: totalChapters, 
