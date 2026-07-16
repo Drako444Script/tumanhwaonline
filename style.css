@@ -1381,3 +1381,236 @@ input[type="file"]:hover {
   font-weight: bold;
 }
 
+
+/* -- Zona Drag & Drop de Capítulo -- */
+.upch-dropzone {
+  position: relative;
+  border: 2px dashed #bdc3c7;
+  border-radius: 6px;
+  background: #f9f9f9;
+  padding: 24px 12px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s;
+  min-height: 90px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.upch-dropzone:hover, .upch-dropzone.drag-over { border-color: #c0392b; background-color: #fdf3f3; }
+.upch-dropzone-icon { font-size: 28px; line-height: 1; }
+.upch-dropzone-text { font-size: 13px; color: #2c3e50; }
+.upch-dropzone-hint { font-size: 11px; color: #7f8c8d; }
+
+/* -- Cuadrícula de Miniaturas -- */
+.upch-preview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; margin-top: 8px; }
+.upch-thumb-wrap { position: relative; aspect-ratio: 2/3; border-radius: 4px; overflow: hidden; border: 1px solid #ddd; background: #f0f0f0; }
+.upch-thumb-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.upch-thumb-num { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.55); color: #fff; font-size: 9px; text-align: center; padding: 2px 0; }
+.upch-thumb-del { position: absolute; top: 2px; right: 2px; background: rgba(192,57,43,0.85); color: #fff; border: none; border-radius: 50%; width: 16px; height: 16px; font-size: 9px; line-height: 16px; cursor: pointer; padding: 0; display: none; }
+.upch-thumb-wrap:hover .upch-thumb-del { display: block; }
+
+/* ===================================================
+   OPTIMIZACIONES MÓVILES (TuManhwaOnline Responsive)
+   =================================================== */
+
+/* Botón del menú móvil (oculto en escritorio) */
+.nav-mobile-toggle {
+  display: none;
+  width: 100%;
+  padding: 10px;
+  background-color: #2c3e50;
+  color: #fff;
+  border: 1px solid #34495e;
+  border-radius: 4px;
+  font-weight: bold;
+  cursor: pointer;
+  font-size: 13px;
+  text-align: center;
+  margin-bottom: 5px;
+}
+
+@media (max-width: 768px) {
+  /* 1. Header y Logo en móvil */
+  .header-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 10px;
+  }
+  .logo {
+    text-align: center;
+    margin-bottom: 2px;
+  }
+  .search-box {
+    width: 100% !important;
+    display: flex;
+  }
+  .search-box input {
+    flex: 1;
+  }
+
+  /* 2. Menú de navegación colapsable en móvil */
+  .nav-mobile-toggle {
+    display: block; /* Mostrar botón de menú */
+  }
+  
+  .nav-inner {
+    flex-direction: column;
+    padding: 8px 10px;
+  }
+
+  .nav-links {
+    display: none; /* Ocultar links por defecto */
+    flex-direction: column;
+    width: 100%;
+    gap: 4px;
+    margin-top: 5px;
+    background-color: #f8f9f9;
+    border: 1px solid #eaeded;
+    border-radius: 4px;
+    padding: 8px;
+  }
+
+  .nav-links.show {
+    display: flex; /* Mostrar cuando tenga clase .show */
+  }
+
+  .nav-link {
+    display: block;
+    width: 100%;
+    padding: 10px 12px;
+    border-bottom: 1px solid #eaeded;
+    box-sizing: border-box;
+    font-size: 13px;
+  }
+  
+  .nav-link:last-child {
+    border-bottom: none;
+  }
+
+  .btn-subir {
+    width: 100% !important;
+    margin-top: 8px;
+    box-sizing: border-box;
+    padding: 11px !important;
+    font-size: 13px;
+  }
+
+  /* 3. Ajustes de Topbar */
+  .topbar-inner {
+    flex-direction: column;
+    gap: 6px;
+    text-align: center;
+    padding: 6px 10px;
+  }
+  .welcome-text {
+    font-size: 10px;
+  }
+  .auth-section {
+    font-size: 11px;
+  }
+
+  /* 4. Vista de Detalle del Manga en celular */
+  .manga-detail {
+    padding: 12px;
+  }
+  .detail-header {
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+  }
+  .detail-cover {
+    width: 180px;
+    margin: 0 auto;
+  }
+  .detail-cover img {
+    width: 100%;
+    height: auto;
+  }
+  .detail-info {
+    width: 100%;
+  }
+  .detail-title {
+    font-size: 18px;
+    text-align: center;
+  }
+  .detail-meta-table {
+    width: 100%;
+    font-size: 12px;
+    margin: 10px 0;
+  }
+  .detail-meta-table td {
+    padding: 5px 2px;
+  }
+  .detail-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+  .detail-actions button {
+    width: 100%;
+    margin: 0 !important;
+    padding: 12px;
+    font-size: 13px;
+  }
+
+  /* 5. Comentarios y Formularios */
+  .comment-input-area {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .comment-input-area textarea {
+    width: 100% !important;
+    box-sizing: border-box;
+  }
+  .btn-comentar {
+    width: 100%;
+  }
+
+  /* 6. Lector de Capítulos en celular */
+  .lector-toolbar {
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px;
+  }
+  .lector-toolbar-left {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .lector-toolbar-right {
+    width: 100%;
+    display: flex;
+    gap: 6px;
+  }
+  .lector-toolbar-right button {
+    flex: 1;
+    padding: 8px;
+    font-size: 11px;
+  }
+  .lector-nav-bottom {
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+  }
+  .lector-nav-bottom button {
+    width: 100%;
+    padding: 12px;
+    font-size: 13px;
+  }
+
+  /* 7. Modales en móvil */
+  .modal-box {
+    width: 92% !important;
+    margin: 20px auto;
+    padding: 15px;
+  }
+  
+  .upch-dropzone {
+    padding: 15px 10px;
+  }
+}

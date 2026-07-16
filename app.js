@@ -1202,12 +1202,128 @@ async function doUpload(e) {
   }
 }
 
-// ── Subir Capítulo ──
+// ── Subir Capítulo (con Drag & Drop y Previsualizaciones) ──
+
+// Array global que almacena los dataURLs de las páginas seleccionadas
+var upchSelectedPages = [];
+
 function openUploadChapterModal() {
   if (!state.selectedManga) return;
+
+  // Resetear estado previo
+  upchSelectedPages = [];
   document.getElementById('upch-manga-title').value = state.selectedManga.title;
+  
+  // Auto-sugerir el siguiente capítulo
+  var nextChap = (state.selectedManga.chapters || 0) + 1;
+  document.getElementById('upch-num').value = nextChap;
+
+  // Limpiar previsualizaciones
+  document.getElementById('upch-preview-grid').innerHTML = '';
+  document.getElementById('upch-page-count').style.display = 'none';
+  document.getElementById('upch-page-count').textContent = '';
+  document.getElementById('upch-progress-wrap').style.display = 'none';
+  
+  // Limpiar el input de archivo
+  document.getElementById('upch-files').value = '';
+
   openModal('upload-chapter-modal');
+
+  // Configurar drag & drop en la zona
+  var dropzone = document.getElementById('upch-dropzone');
+  var fileInput = document.getElementById('upch-files');
+
+  // Cambio de archivos por clic
+  fileInput.onchange = function() {
+    processUpchFiles(this.files);
+  };
+
+  // Eventos drag & drop
+  dropzone.ondragover = function(ev) {
+    ev.preventDefault();
+    dropzone.classList.add('drag-over');
+  };
+  dropzone.ondragleave = function() {
+    dropzone.classList.remove('drag-over');
+  };
+  dropzone.ondrop = function(ev) {
+    ev.preventDefault();
+    dropzone.classList.remove('drag-over');
+    processUpchFiles(ev.dataTransfer.files);
+  };
 }
+
+// Procesa los archivos de imagen seleccionados y genera miniaturas
+function processUpchFiles(files) {
+  if (!files || files.length === 0) return;
+
+  var progressWrap = document.getElementById('upch-progress-wrap');
+  var progressBar = document.getElementById('upch-progress-bar');
+  var progressText = document.getElementById('upch-progress-text');
+  var countEl = document.getElementById('upch-page-count');
+  var previewGrid = document.getElementById('upch-preview-grid');
+
+  // Ordenar los archivos por nombre para mantener el orden de páginas
+  var sorted = Array.from(files).sort(function(a, b) {
+    return a.name.localeCompare(b.name, undefined, { numeric: true });
+  });
+
+  upchSelectedPages = new Array(sorted.length);
+  progressWrap.style.display = 'block';
+  progressBar.style.width = '0%';
+  progressText.textContent = 'Procesando 0 / ' + sorted.length + ' imágenes...';
+  previewGrid.innerHTML = '';
+
+  // Pre-crear los slots de miniaturas en orden
+  sorted.forEach(function(file, idx) {
+    var wrap = document.createElement('div');
+    wrap.className = 'upch-thumb-wrap';
+    wrap.id = 'upch-thumb-' + idx;
+    wrap.innerHTML = '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:18px;">⏳</div>' +
+      '<span class="upch-thumb-num">Pág. ' + (idx + 1) + '</span>';
+    previewGrid.appendChild(wrap);
+  });
+
+  var loaded = 0;
+  sorted.forEach(function(file, idx) {
+    var reader = new FileReader();
+    reader.onload = function(evt) {
+      upchSelectedPages[idx] = evt.target.result;
+      loaded++;
+
+      // Actualizar miniatura
+      var wrap = document.getElementById('upch-thumb-' + idx);
+      if (wrap) {
+        wrap.innerHTML = '<img src="' + evt.target.result + '" alt="Pág ' + (idx + 1) + '">' +
+          '<span class="upch-thumb-num">Pág. ' + (idx + 1) + '</span>' +
+          '<button class="upch-thumb-del" onclick="removeUpchPage(' + idx + ')" title="Quitar">✕</button>';
+      }
+
+      // Actualizar barra de progreso
+      var pct = Math.round((loaded / sorted.length) * 100);
+      progressBar.style.width = pct + '%';
+      progressText.textContent = 'Procesando ' + loaded + ' / ' + sorted.length + ' imágenes...';
+
+      if (loaded === sorted.length) {
+        progressText.textContent = '✅ ' + sorted.length + ' páginas listas para publicar.';
+        progressBar.style.background = '#27ae60';
+        countEl.textContent = '✅ ' + sorted.length + ' páginas seleccionadas y listas.';
+        countEl.style.display = 'block';
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// Quitar una página individual de la selección
+function removeUpchPage(idx) {
+  upchSelectedPages[idx] = null;
+  var wrap = document.getElementById('upch-thumb-' + idx);
+  if (wrap) wrap.style.opacity = '0.3';
+  var remaining = upchSelectedPages.filter(function(p) { return p !== null; }).length;
+  document.getElementById('upch-page-count').textContent = '✅ ' + remaining + ' páginas seleccionadas.';
+}
+
 
 async function doUploadChapter(e) {
   e.preventDefault();
@@ -1280,31 +1396,18 @@ async function doUploadChapter(e) {
   }
 
   var pagesList = [];
-  if (pagesText) {
-    pagesList = pagesText.split('\n').map(function(line) { return line.trim(); }).filter(function(line) { return line !== ""; });
-  }
-
-  // Si el usuario seleccionó archivos locales para las páginas
-  if (fileInput.files && fileInput.files.length > 0) {
-    var files = fileInput.files;
-    var loaded = 0;
-    
-    showToast("Procesando imágenes locales, por favor espera...");
-    
-    for (var i = 0; i < files.length; i++) {
-      (function(file) {
-        var reader = new FileReader();
-        reader.onload = async function(evt) {
-          pagesList.push(evt.target.result);
-          loaded++;
-          if (loaded === files.length) {
-            await saveChapter(pagesList);
-          }
-        };
-        reader.readAsDataURL(file);
-      })(files[i]);
-    }
+  
+  // Usar páginas pre-procesadas del drag & drop (ya están en Base64)
+  var cachedPages = upchSelectedPages.filter(function(p) { return p !== null && p !== undefined; });
+  
+  if (cachedPages.length > 0) {
+    // Ya tenemos las páginas procesadas, publicar directo
+    await saveChapter(cachedPages);
   } else {
+    // Fallback: leer URLs pegadas en el textarea
+    if (pagesText) {
+      pagesList = pagesText.split('\n').map(function(line) { return line.trim(); }).filter(function(line) { return line !== ""; });
+    }
     await saveChapter(pagesList);
   }
 }
@@ -1324,11 +1427,24 @@ function goHome() {
   var histSec = document.getElementById('history-section-el');
   if (histSec) histSec.style.display = 'block';
 
+  // Cerrar menú móvil
+  var menu = document.getElementById('nav-links-menu');
+  if (menu) menu.classList.remove('show');
+
   renderHistory();
   document.getElementById('sidebar').style.display = window.innerWidth > 768 ? 'block' : 'none';
   renderGrid();
   window.scrollTo({ top: 0 });
 }
+
+// ── Control del Menú Hamburguesa Móvil ──
+function toggleMobileMenu() {
+  var menu = document.getElementById('nav-links-menu');
+  if (menu) {
+    menu.classList.toggle('show');
+  }
+}
+
 
 // ══════════════════════════════════════════════
 // ── SOPORTE Y REPORTES ──

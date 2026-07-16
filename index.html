@@ -36,7 +36,8 @@
   <!-- Navegación Principal -->
   <nav class="nav">
     <div class="container nav-inner">
-      <div class="nav-links">
+      <button class="nav-mobile-toggle" onclick="toggleMobileMenu()">☰ Menú de Navegación</button>
+      <div class="nav-links" id="nav-links-menu">
         <a href="#" class="nav-link active" onclick="setFilterType('all', this)">Inicio</a>
         <a href="#" class="nav-link" onclick="setFilterType('manga', this)">Mangas</a>
         <a href="#" class="nav-link" onclick="setFilterType('manhwa', this)">Manhwas</a>
@@ -44,7 +45,7 @@
         <a href="#" class="nav-link" onclick="setFilterType('novel', this)">Novelas</a>
         <a href="#" class="nav-link text-red" onclick="toggleNSFWFilter(this)">Zona +18</a>
       </div>
-      <button class="btn-subir" onclick="openUploadModal()">+ Subir Manga</button>
+      <button class="btn-subir" id="nav-btn-subir" onclick="openUploadModal()">+ Subir Manga</button>
     </div>
   </nav>
 
@@ -255,38 +256,67 @@
     </div>
   </div>
 
-  <!-- Modal de Subida de Capítulo -->
+  <!-- Modal de Subida de Capítulo (Mejorado) -->
   <div class="modal-overlay" id="upload-chapter-modal">
-    <div class="modal-box">
+    <div class="modal-box" style="max-width: 540px;">
       <div class="modal-header">
-        <span>Subir Nuevo Capítulo</span>
+        <span>📤 Subir Nuevo Capítulo</span>
         <button class="close-btn" onclick="closeModal('upload-chapter-modal')">✕</button>
       </div>
       <div class="modal-body">
         <form onsubmit="doUploadChapter(event)">
-          <div class="form-group">
-            <label>Manga Seleccionado:</label>
-            <input type="text" id="upch-manga-title" disabled style="background-color:#eaeded; font-weight:bold;">
+
+          <!-- Manga y número de capítulo -->
+          <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+            <div class="form-group" style="flex: 2; margin-bottom: 0;">
+              <label>Manga / Manhwa:</label>
+              <input type="text" id="upch-manga-title" disabled style="background-color:#eaeded; font-weight:bold;">
+            </div>
+            <div class="form-group" style="flex: 1; margin-bottom: 0;">
+              <label>Capítulo Nº:</label>
+              <input type="number" id="upch-num" required min="1" placeholder="Ej: 15">
+            </div>
           </div>
+
+          <!-- Nombre opcional del capítulo -->
           <div class="form-group">
-            <label>Número del Capítulo:</label>
-            <input type="number" id="upch-num" required min="1" placeholder="Ej: 15">
+            <label>Título del Capítulo (Opcional):</label>
+            <input type="text" id="upch-name" placeholder='Ej: "El despertar del héroe"'>
           </div>
+
+          <!-- Zona de Drag & Drop -->
           <div class="form-group">
-            <label>Nombre del Capítulo (Opcional):</label>
-            <input type="text" id="upch-name" placeholder="Ej: El despertar de las sombras">
+            <label>Páginas del Capítulo:</label>
+            <div id="upch-dropzone" class="upch-dropzone">
+              <div class="upch-dropzone-icon">🖼️</div>
+              <div class="upch-dropzone-text"><strong>Arrastra las imágenes aquí</strong></div>
+              <div class="upch-dropzone-hint">o haz clic para seleccionarlas desde tu dispositivo</div>
+              <div class="upch-dropzone-hint" style="margin-top:4px; color:#e74c3c;">Acepta múltiples archivos JPG, PNG, WebP</div>
+              <input type="file" id="upch-files" accept="image/*" multiple style="position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%;">
+            </div>
+
+            <!-- Contador de páginas seleccionadas -->
+            <div id="upch-page-count" style="display:none; margin: 8px 0 4px; font-size:12px; color:#27ae60; font-weight: bold;"></div>
+
+            <!-- Miniaturas de vista previa -->
+            <div id="upch-preview-grid" class="upch-preview-grid"></div>
+
+            <!-- Barra de progreso de carga -->
+            <div id="upch-progress-wrap" style="display:none; margin-top:8px;">
+              <div style="font-size:11px; color:#555; margin-bottom:4px;" id="upch-progress-text">Procesando imágenes...</div>
+              <div class="upload-progress-bar-wrap">
+                <div class="upload-progress-bar" id="upch-progress-bar"></div>
+              </div>
+            </div>
           </div>
-          <div class="form-group">
-            <label>Grupo / Scan Traductor (Opcional):</label>
-            <input type="text" id="upch-scan" placeholder="Ej: CyberScan">
-          </div>
-          <div class="form-group">
-            <label>Seleccionar Páginas desde tu PC/Celular (Múltiples Archivos):</label>
-            <input type="file" id="upch-files" accept="image/*" multiple style="margin-bottom: 5px;">
-            <span style="font-size: 11px; color: #7f8c8d; display: block; margin-bottom: 2px;">O pega enlaces de imágenes directos (uno por línea):</span>
-            <textarea id="upch-pages" rows="4" placeholder="https://i.imgur.com/pag1.jpg&#10;https://i.imgur.com/pag2.jpg"></textarea>
-          </div>
-          <button type="submit" class="btn-submit">Publicar Capítulo</button>
+
+          <!-- URLs alternativas -->
+          <details style="margin-bottom: 12px;">
+            <summary style="cursor:pointer; font-size:12px; color:#7f8c8d; user-select:none;">📎 O pega URLs de imágenes (alternativa)</summary>
+            <textarea id="upch-pages" rows="3" style="margin-top:6px;" placeholder="https://i.imgur.com/pag1.jpg&#10;https://i.imgur.com/pag2.jpg"></textarea>
+          </details>
+
+          <button type="submit" class="btn-submit" id="upch-submit-btn">📤 Publicar Capítulo</button>
         </form>
       </div>
     </div>
