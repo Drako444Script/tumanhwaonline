@@ -35,7 +35,6 @@ const state = {
 };
 
 // ── Cargar datos del sistema ──
-// ── Cargar datos del sistema ──
 async function loadState() {
   try {
     state.currentUser = JSON.parse(localStorage.getItem('tm-user')) || null;
@@ -161,14 +160,15 @@ function closeModal(id) {
 // ══════════════════════════════════════════════
 // ── INICIALIZACIÓN ──
 // ══════════════════════════════════════════════
-document.addEventListener('DOMContentLoaded', () => {
-  loadState();
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadState();
   renderAuth();
   renderGenres();
   updateStats();
   renderHistory();
   renderFeatured();
   renderGrid();
+  renderSidebarStats();
 
   // Buscador
   const searchInput = document.getElementById('search-input');
