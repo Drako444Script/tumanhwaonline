@@ -66,6 +66,15 @@ const ALL_GENRES = [
   "Escolar", "Tragedia", "Gore", "Mecha", "Deportes", "Histórico", "Música"
 ];
 
+// ── Cuentas con permisos de Administrador ──
+const ADMIN_EMAILS = [
+  "brandonesau250@gmail.com"
+];
+
+function isAdmin() {
+  return state.currentUser && ADMIN_EMAILS.indexOf(state.currentUser.email) !== -1;
+}
+
 // ── Cargar datos del sistema ──
 async function loadState() {
   try {
@@ -291,10 +300,11 @@ function renderAuth() {
       const initial = state.currentUser.username[0].toUpperCase();
       avatarHTML = `<div class="topbar-avatar-fallback">${initial}</div>`;
     }
+    const adminBadge = isAdmin() ? '<span style="background:#e74c3c; color:#fff; font-size:9px; padding:2px 6px; border-radius:3px; margin-left:4px; font-weight:bold; letter-spacing:0.5px;">ADMIN</span>' : '';
     container.innerHTML = `
       <div class="user-auth-info" onclick="openProfileModal(); return false;" style="cursor:pointer; display:inline-flex; align-items:center; gap:8px; margin-right: 12px; vertical-align: middle;">
         ${avatarHTML}
-        <span>Hola, <strong class="username-tag">${state.currentUser.username}</strong></span>
+        <span>Hola, <strong class="username-tag">${state.currentUser.username}</strong>${adminBadge}</span>
       </div>
       <a href="#" class="logout-btn" onclick="logout(); return false;" style="vertical-align: middle;">Cerrar Sesión</a>
     `;
@@ -344,6 +354,8 @@ function openProfileModal() {
 
   // Pre-llenar formulario de edición
   document.getElementById('prof-display-name').value = state.currentUser.username;
+  var profEmailEl = document.getElementById('prof-email');
+  if (profEmailEl) profEmailEl.value = state.currentUser.email || '';
   document.getElementById('prof-avatar-url').value = state.currentUser.avatar || '';
   document.getElementById('prof-bio').value = state.currentUser.bio || '';
   
@@ -358,6 +370,8 @@ async function saveProfileSettings(e) {
   if (!state.currentUser) return;
 
   var newUsername = document.getElementById('prof-display-name').value.trim();
+  var profEmailEl = document.getElementById('prof-email');
+  var newEmail = profEmailEl ? profEmailEl.value.trim() : state.currentUser.email;
   var newAvatar = document.getElementById('prof-avatar-url').value.trim();
   var newBio = document.getElementById('prof-bio').value.trim();
   var fileInput = document.getElementById('prof-avatar-file');
@@ -365,6 +379,7 @@ async function saveProfileSettings(e) {
   async function proceedSave(avatarData) {
     if (newUsername) {
       state.currentUser.username = newUsername;
+      state.currentUser.email = newEmail;
       state.currentUser.avatar = avatarData;
       state.currentUser.bio = newBio;
       saveState();
@@ -390,11 +405,18 @@ function doLogin(e) {
   e.preventDefault();
   const username = document.getElementById('login-user').value.trim();
   if (username) {
-    state.currentUser = { username, email: username + '@tumanhwaonline.com', avatar: '', bio: '' };
+    // Preservar datos existentes del usuario si ya existía
+    var existingUser = null;
+    try { existingUser = JSON.parse(localStorage.getItem('tm-user')); } catch(ex) {}
+    var email = (existingUser && existingUser.username === username) ? existingUser.email : username + '@tumanhwaonline.com';
+    var avatar = (existingUser && existingUser.username === username) ? (existingUser.avatar || '') : '';
+    var bio = (existingUser && existingUser.username === username) ? (existingUser.bio || '') : '';
+    state.currentUser = { username: username, email: email, avatar: avatar, bio: bio };
     saveState();
     renderAuth();
     closeModal('login-modal');
-    showToast('¡Bienvenido de vuelta, ' + username + '!');
+    var welcomeMsg = isAdmin() ? '¡Bienvenido, Administrador ' + username + '!' : '¡Bienvenido de vuelta, ' + username + '!';
+    showToast(welcomeMsg);
     refreshCurrentView();
   }
 }
@@ -404,11 +426,12 @@ function doRegister(e) {
   const username = document.getElementById('reg-user').value.trim();
   const email = document.getElementById('reg-email').value.trim();
   if (username && email) {
-    state.currentUser = { username, email, avatar: '', bio: '' };
+    state.currentUser = { username: username, email: email, avatar: '', bio: '' };
     saveState();
     renderAuth();
     closeModal('register-modal');
-    showToast('¡Cuenta registrada exitosamente, ' + username + '!');
+    var welcomeMsg = isAdmin() ? '¡Cuenta de Administrador registrada, ' + username + '!' : '¡Cuenta registrada exitosamente, ' + username + '!';
+    showToast(welcomeMsg);
     refreshCurrentView();
   }
 }
@@ -721,6 +744,7 @@ async function showDetail(id) {
             '<button class="btn-classic-red" onclick="startReading()">Leer Primer Capítulo</button>' +
             '<button class="btn-classic-grey" onclick="openLibraryModal(' + manga.id + ')">' + (libSection ? '★ Cambiar Estado' : '☆ Agregar a Biblioteca') + '</button>' +
             '<button class="btn-classic-grey" onclick="startDownloadSimulation()">↓ Descargar</button>' +
+            (isAdmin() ? '<button class="btn-classic-grey btn-admin-delete" style="background-color:#e74c3c; color:#fff; border-color:#c0392b;" onclick="deleteManga(' + manga.id + ')">🗑 Eliminar Obra (Admin)</button>' : '') +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -879,15 +903,17 @@ async function renderCommentsList(mangaId) {
     return;
   }
 
-  container.innerHTML = list.map(c =>
-    '<div class="comment-item">' +
-      '<div class="comment-meta">' +
+  container.innerHTML = list.map(function(c, index) {
+    var deleteBtn = isAdmin() ? '<button class="btn-delete-comment" onclick="deleteComment(' + mangaId + ', ' + index + ')">🗑 Borrar</button>' : '';
+    return '<div class="comment-item">' +
+      '<div class="comment-meta" style="display:flex; align-items:center; gap:8px;">' +
         '<span class="comment-author ' + (c.is_staff ? 'uploader-author' : '') + '">' + c.author + (c.is_staff ? ' [Traductor]' : '') + '</span>' +
         '<span>' + (c.date || 'Hace un momento') + '</span>' +
+        deleteBtn +
       '</div>' +
       '<div class="comment-content">' + c.text + '</div>' +
-    '</div>'
-  ).join('');
+    '</div>';
+  }).join('');
 }
 
 async function addComment(mangaId) {
@@ -932,6 +958,75 @@ function saveCommentLocalFallback(mangaId, author, text, isStaff) {
   if (textInput) textInput.value = '';
   renderCommentsList(mangaId);
   showToast("Comentario guardado localmente.");
+}
+
+// ══════════════════════════════════════════════
+// ── MODERACIÓN DE ADMINISTRADOR ──
+// ══════════════════════════════════════════════
+async function deleteManga(mangaId) {
+  if (!isAdmin()) {
+    showToast("No tienes permisos de administrador.");
+    return;
+  }
+  var manga = state.catalog.find(function(m) { return m.id === mangaId; });
+  if (!manga) return;
+
+  var confirmar = confirm("⚠ ADMIN: ¿Estás seguro de eliminar \"" + manga.title + "\" del catálogo?\n\nEsta acción no se puede deshacer.");
+  if (!confirmar) return;
+
+  // Eliminar de Supabase si está conectado
+  if (supabaseClient) {
+    try {
+      let { error } = await supabaseClient
+        .from('catalog')
+        .delete()
+        .eq('id', mangaId);
+      if (error) throw error;
+      showToast("🗑 \"" + manga.title + "\" eliminado del servidor.");
+      await syncWithSupabase();
+    } catch (err) {
+      console.error("Error al eliminar de Supabase:", err);
+      showToast("Error de conexión. Se eliminó localmente.");
+      deleteLocalManga(mangaId);
+    }
+  } else {
+    deleteLocalManga(mangaId);
+  }
+
+  goHome();
+}
+
+function deleteLocalManga(mangaId) {
+  state.catalog = state.catalog.filter(function(m) { return m.id !== mangaId; });
+  delete state.comments[mangaId];
+  delete state.library[mangaId];
+  delete state.readChapters[mangaId];
+  state.history = state.history.filter(function(h) { return h.mangaId !== mangaId; });
+  saveState();
+  updateStats();
+  renderGenres();
+  renderFeatured();
+  renderGrid();
+  renderSidebarStats();
+}
+
+async function deleteComment(mangaId, commentIndex) {
+  if (!isAdmin()) {
+    showToast("No tienes permisos de administrador.");
+    return;
+  }
+  var confirmar = confirm("⚠ ADMIN: ¿Eliminar este comentario?");
+  if (!confirmar) return;
+
+  // Eliminar localmente
+  var list = state.comments[mangaId] || [];
+  if (commentIndex >= 0 && commentIndex < list.length) {
+    list.splice(commentIndex, 1);
+    state.comments[mangaId] = list;
+    saveState();
+    renderCommentsList(mangaId);
+    showToast("🗑 Comentario eliminado por el administrador.");
+  }
 }
 
 // ══════════════════════════════════════════════

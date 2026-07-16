@@ -1716,3 +1716,33 @@ input[type="file"]:hover {
 .star-rating-btn:active {
   transform: scale(1.2);
 }
+
+/* ════ Moderación de Administrador ════ */
+.btn-delete-comment {
+  background: none;
+  border: none;
+  color: #e74c3c;
+  font-size: 11px;
+  cursor: pointer;
+  margin-left: auto; /* Alinear a la derecha si es posible */
+  padding: 0;
+  font-weight: 500;
+  transition: color 0.15s ease;
+}
+
+.btn-delete-comment:hover {
+  color: #c0392b;
+  text-decoration: underline;
+}
+
+.btn-admin-delete {
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.btn-admin-delete:hover {
+  background-color: #922b21 !important;
+}
+
+.btn-admin-delete:active {
+  transform: scale(0.98);
+}
