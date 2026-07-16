@@ -3,6 +3,27 @@
    Sincronizado en tiempo real. Hosting en Netlify.
    ═══════════════════════════════════════════ */
 
+// Captura de errores global para depuración en producción
+window.onerror = function(message, source, lineno, colno, error) {
+  try {
+    var errorDiv = document.createElement('div');
+    errorDiv.style.position = 'fixed';
+    errorDiv.style.top = '0';
+    errorDiv.style.left = '0';
+    errorDiv.style.width = '100%';
+    errorDiv.style.backgroundColor = '#e74c3c';
+    errorDiv.style.color = '#fff';
+    errorDiv.style.padding = '15px';
+    errorDiv.style.zIndex = '999999';
+    errorDiv.style.textAlign = 'center';
+    errorDiv.style.fontWeight = 'bold';
+    errorDiv.style.fontFamily = 'sans-serif';
+    errorDiv.innerHTML = '🚨 ERROR DE JAVASCRIPT: ' + message + ' (Línea: ' + lineno + ')<br><span style="font-size:11px;font-weight:normal;">' + (source || '') + '</span>';
+    document.body.appendChild(errorDiv);
+  } catch(e) {}
+  return false;
+};
+
 // ── Credenciales de Supabase ──
 const SUPABASE_URL = "https://uwentmslkkroivlajvsx.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV3ZW50bXNsa2tyb2l2bGFqdnN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxNTAzOTIsImV4cCI6MjA5OTcyNjM5Mn0.H5DdP_FtbWuUF2t52PzHAHA76WNdpWwuqK0QTvBbUyg"; 
@@ -41,10 +62,33 @@ const state = {
 // ── Cargar datos del sistema ──
 async function loadState() {
   try {
-    state.currentUser = JSON.parse(localStorage.getItem('tm-user')) || null;
-    state.readChapters = JSON.parse(localStorage.getItem('tm-read')) || {};
-    state.library = JSON.parse(localStorage.getItem('tm-library')) || {};
-    state.history = JSON.parse(localStorage.getItem('tm-history')) || [];
+    try {
+      state.currentUser = JSON.parse(localStorage.getItem('tm-user')) || null;
+    } catch (e) {
+      console.warn("Error cargando usuario local:", e);
+      state.currentUser = null;
+    }
+    
+    try {
+      state.readChapters = JSON.parse(localStorage.getItem('tm-read')) || {};
+    } catch (e) {
+      console.warn("Error cargando capítulos leídos:", e);
+      state.readChapters = {};
+    }
+    
+    try {
+      state.library = JSON.parse(localStorage.getItem('tm-library')) || {};
+    } catch (e) {
+      console.warn("Error cargando biblioteca local:", e);
+      state.library = {};
+    }
+    
+    try {
+      state.history = JSON.parse(localStorage.getItem('tm-history')) || [];
+    } catch (e) {
+      console.warn("Error cargando historial local:", e);
+      state.history = [];
+    }
 
     // Si Supabase está configurado, cargamos en tiempo real con recuperación local en caso de error
     if (supabase) {
@@ -61,20 +105,36 @@ async function loadState() {
 // Cargar desde almacenamiento local del navegador (Caché local/Offline)
 function loadLocalFallbackData() {
   console.log("Cargando base de datos local (localStorage)...");
-  var savedCatalog = localStorage.getItem('tm-catalog');
-  state.comments = JSON.parse(localStorage.getItem('tm-comments')) || {};
-  if (savedCatalog) {
-    state.catalog = JSON.parse(savedCatalog);
-  } else {
+  
+  try {
+    state.comments = JSON.parse(localStorage.getItem('tm-comments')) || {};
+  } catch (e) {
+    console.warn("Error parseando comentarios locales, reseteando:", e);
+    state.comments = {};
+  }
+
+  try {
+    var savedCatalog = localStorage.getItem('tm-catalog');
+    if (savedCatalog) {
+      state.catalog = JSON.parse(savedCatalog);
+    } else {
+      state.catalog = [];
+    }
+  } catch (e) {
+    console.warn("Error parseando catálogo local, reseteando:", e);
     state.catalog = [];
   }
   
   // Renderizar la interfaz para que todo funcione
-  updateStats();
-  renderFeatured();
-  renderGenres();
-  renderGrid();
-  renderSidebarStats();
+  try {
+    updateStats();
+    renderFeatured();
+    renderGenres();
+    renderGrid();
+    renderSidebarStats();
+  } catch (err) {
+    console.error("Error renderizando interfaz local:", err);
+  }
 }
 
 // Sincronizar catálogo y vistas en tiempo real con Supabase
