@@ -27,6 +27,7 @@ window.onerror = function(message, source, lineno, colno, error) {
 // ── Credenciales de Supabase ──
 const SUPABASE_URL = "https://uwentmslkkroivlajvsx.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV3ZW50bXNsa2tyb2l2bGFqdnN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxNTAzOTIsImV4cCI6MjA5OTcyNjM5Mn0.H5DdP_FtbWuUF2t52PzHAHA76WNdpWwuqK0QTvBbUyg"; 
+const IMGBB_API_KEY = "2f4ac135e5d35e1abbdcea881658f588"; 
 
 // Inicializar cliente de Supabase de forma segura
 let supabaseClient = null;
@@ -1705,11 +1706,18 @@ async function doUpload(e) {
 
   // Si el usuario subió un archivo local
   if (fileInput.files && fileInput.files[0]) {
-    var reader = new FileReader();
-    reader.onload = async function(evt) {
-      await saveManga(evt.target.result);
-    };
-    reader.readAsDataURL(fileInput.files[0]);
+    showToast("Subiendo portada a ImgBB...");
+    try {
+      var coverUrl = await uploadToImgBB(fileInput.files[0]);
+      await saveManga(coverUrl);
+    } catch (err) {
+      console.error("Error subiendo portada a ImgBB:", err);
+      showToast("Fallo al subir la portada a ImgBB. Usando portada genérica.");
+      var colors = ['2c3e50', '8e44ad', '27ae60', 'e74c3c', '34495e', 'f39c12', 'c0392b', 'd35400', '16a085', '2980b9'];
+      var randomColor = colors[Math.floor(Math.random() * colors.length)];
+      var fallbackCover = 'https://placehold.co/300x420/' + randomColor + '/ffffff?text=' + encodeURIComponent(title.substring(0, 20));
+      await saveManga(fallbackCover);
+    }
   } else {
     var coverUrl = coverInput;
     if (!coverUrl) {
@@ -1772,8 +1780,8 @@ function openUploadChapterModal() {
   };
 }
 
-// Procesa los archivos de imagen seleccionados y genera miniaturas
-function processUpchFiles(files) {
+// Procesa los archivos de imagen seleccionados (o archivo ZIP) y genera miniaturas
+async function processUpchFiles(files) {
   if (!files || files.length === 0) return;
 
   var progressWrap = document.getElementById('upch-progress-wrap');
@@ -1782,55 +1790,75 @@ function processUpchFiles(files) {
   var countEl = document.getElementById('upch-page-count');
   var previewGrid = document.getElementById('upch-preview-grid');
 
-  // Ordenar los archivos por nombre para mantener el orden de páginas
-  var sorted = Array.from(files).sort(function(a, b) {
-    return a.name.localeCompare(b.name, undefined, { numeric: true });
+  let filesArray = Array.from(files);
+
+  // 1. Si es un único archivo ZIP, descomprimirlo
+  if (filesArray.length === 1 && filesArray[0].name.toLowerCase().endsWith('.zip')) {
+    progressWrap.style.display = 'block';
+    progressBar.style.width = '20%';
+    progressBar.style.background = '#3498db';
+    progressText.textContent = 'Leyendo archivo ZIP...';
+    
+    try {
+      const zip = new JSZip();
+      const loadedZip = await zip.loadAsync(filesArray[0]);
+      
+      // Filtrar por imágenes omitiendo carpetas del sistema
+      const imgNames = Object.keys(loadedZip.files).filter(name => {
+        return !loadedZip.files[name].dir && /\.(png|jpe?g|webp|gif)$/i.test(name) && !name.includes('__MACOSX');
+      }).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+
+      if (imgNames.length === 0) {
+        showToast("El archivo ZIP no contiene imágenes válidas.");
+        progressWrap.style.display = 'none';
+        return;
+      }
+
+      progressText.textContent = 'Descomprimiendo ' + imgNames.length + ' imágenes...';
+      const filePromises = imgNames.map(async (name, index) => {
+        const zipFile = loadedZip.file(name);
+        const blob = await zipFile.async("blob");
+        var pct = 20 + Math.round((index / imgNames.length) * 60);
+        progressBar.style.width = pct + '%';
+        return new File([blob], name, { type: blob.type });
+      });
+
+      filesArray = await Promise.all(filePromises);
+      progressBar.style.width = '80%';
+    } catch (zipErr) {
+      console.error("Error al descomprimir el archivo ZIP:", zipErr);
+      showToast("No se pudo leer el archivo ZIP.");
+      progressWrap.style.display = 'none';
+      return;
+    }
+  }
+
+  // 2. Ordenar por nombre para asegurar secuencia de lectura correcta
+  filesArray.sort(function(a, b) {
+    return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
   });
 
-  upchSelectedPages = new Array(sorted.length);
+  upchSelectedPages = filesArray;
+
   progressWrap.style.display = 'block';
-  progressBar.style.width = '0%';
-  progressText.textContent = 'Procesando 0 / ' + sorted.length + ' imágenes...';
+  progressBar.style.width = '100%';
+  progressBar.style.background = '#27ae60';
+  progressText.textContent = '✅ ' + filesArray.length + ' páginas listas para publicar.';
+  countEl.textContent = '✅ ' + filesArray.length + ' páginas seleccionadas.';
+  countEl.style.display = 'block';
   previewGrid.innerHTML = '';
 
-  // Pre-crear los slots de miniaturas en orden
-  sorted.forEach(function(file, idx) {
+  // Renderizar las miniaturas usando Object URL (más rápido y ligero)
+  filesArray.forEach(function(file, idx) {
     var wrap = document.createElement('div');
     wrap.className = 'upch-thumb-wrap';
     wrap.id = 'upch-thumb-' + idx;
-    wrap.innerHTML = '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:18px;">⏳</div>' +
-      '<span class="upch-thumb-num">Pág. ' + (idx + 1) + '</span>';
+    
+    var objectUrl = URL.createObjectURL(file);
+    wrap.innerHTML = '<img src="' + objectUrl + '" alt="Pág ' + (idx + 1) + '">' +
+      '<span class="upch-thumb-num">Pág. ' + (idx + 1) + '</span>' +
+      '<button class="upch-thumb-del" type="button" onclick="removeUpchPage(' + idx + ')" title="Quitar">✕</button>';
     previewGrid.appendChild(wrap);
-  });
-
-  var loaded = 0;
-  sorted.forEach(function(file, idx) {
-    var reader = new FileReader();
-    reader.onload = function(evt) {
-      upchSelectedPages[idx] = evt.target.result;
-      loaded++;
-
-      // Actualizar miniatura
-      var wrap = document.getElementById('upch-thumb-' + idx);
-      if (wrap) {
-        wrap.innerHTML = '<img src="' + evt.target.result + '" alt="Pág ' + (idx + 1) + '">' +
-          '<span class="upch-thumb-num">Pág. ' + (idx + 1) + '</span>' +
-          '<button class="upch-thumb-del" onclick="removeUpchPage(' + idx + ')" title="Quitar">✕</button>';
-      }
-
-      // Actualizar barra de progreso
-      var pct = Math.round((loaded / sorted.length) * 100);
-      progressBar.style.width = pct + '%';
-      progressText.textContent = 'Procesando ' + loaded + ' / ' + sorted.length + ' imágenes...';
-
-      if (loaded === sorted.length) {
-        progressText.textContent = '✅ ' + sorted.length + ' páginas listas para publicar.';
-        progressBar.style.background = '#27ae60';
-        countEl.textContent = '✅ ' + sorted.length + ' páginas seleccionadas y listas.';
-        countEl.style.display = 'block';
-      }
-    };
-    reader.readAsDataURL(file);
   });
 }
 
@@ -1916,12 +1944,40 @@ async function doUploadChapter(e) {
 
   var pagesList = [];
   
-  // Usar páginas pre-procesadas del drag & drop (ya están en Base64)
+  // Filtrar páginas válidas seleccionadas
   var cachedPages = upchSelectedPages.filter(function(p) { return p !== null && p !== undefined; });
   
   if (cachedPages.length > 0) {
-    // Ya tenemos las páginas procesadas, publicar directo
-    await saveChapter(cachedPages);
+    var progressWrap = document.getElementById('upch-progress-wrap');
+    var progressBar = document.getElementById('upch-progress-bar');
+    var progressText = document.getElementById('upch-progress-text');
+
+    progressWrap.style.display = 'block';
+    progressBar.style.background = '#e67e22'; // Naranja durante la subida
+    
+    var uploadedUrls = [];
+    try {
+      for (var i = 0; i < cachedPages.length; i++) {
+        var file = cachedPages[i];
+        progressText.textContent = 'Subiendo página ' + (i + 1) + ' de ' + cachedPages.length + ' a ImgBB...';
+        var pct = Math.round((i / cachedPages.length) * 100);
+        progressBar.style.width = pct + '%';
+        
+        var imgUrl = await uploadToImgBB(file);
+        uploadedUrls.push(imgUrl);
+      }
+      
+      progressBar.style.width = '100%';
+      progressBar.style.background = '#27ae60';
+      progressText.textContent = '✅ ¡Imágenes subidas a ImgBB con éxito!';
+      
+      await saveChapter(uploadedUrls);
+    } catch (err) {
+      console.error("Error al subir páginas a ImgBB:", err);
+      showToast("Fallo al subir a ImgBB. Revisa tu conexión.");
+      progressBar.style.background = '#c0392b';
+      progressText.textContent = '❌ Error de subida a ImgBB.';
+    }
   } else {
     // Fallback: leer URLs pegadas en el textarea
     if (pagesText) {
@@ -2172,6 +2228,33 @@ function debounce(fn, delay) {
     clearTimeout(timer);
     timer = setTimeout(function() { fn.apply(null, args); }, delay);
   };
+}
+
+// ── Helper para Subir Imágenes a ImgBB ──
+async function uploadToImgBB(fileOrBase64) {
+  const formData = new FormData();
+  if (typeof fileOrBase64 === 'string') {
+    const cleanBase64 = fileOrBase64.replace(/^data:image\/[a-z]+;base64,/, "");
+    formData.append('image', cleanBase64);
+  } else {
+    formData.append('image', fileOrBase64);
+  }
+
+  const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+    method: 'POST',
+    body: formData
+  });
+
+  if (!response.ok) {
+    throw new Error(`Error en subida a ImgBB: ${response.statusText}`);
+  }
+
+  const json = await response.json();
+  if (json && json.data && json.data.url) {
+    return json.data.url;
+  } else {
+    throw new Error("Respuesta inválida de ImgBB");
+  }
 }
 
 
