@@ -7,10 +7,14 @@
 const SUPABASE_URL = "https://uwentmslkkroivlajvsx.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV3ZW50bXNsa2tyb2l2bGFqdnN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxNTAzOTIsImV4cCI6MjA5OTcyNjM5Mn0.H5DdP_FtbWuUF2t52PzHAHA76WNdpWwuqK0QTvBbUyg"; 
 
-// Inicializar cliente de Supabase
+// Inicializar cliente de Supabase de forma segura
 let supabase = null;
-if (typeof window.supabase !== 'undefined' && SUPABASE_ANON_KEY !== "TU_SUPABASE_ANON_KEY") {
-  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+try {
+  if (typeof window.supabase !== 'undefined' && SUPABASE_ANON_KEY !== "TU_SUPABASE_ANON_KEY") {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+} catch (err) {
+  console.warn("No se pudo inicializar Supabase, trabajando en modo local:", err);
 }
 
 // ── Estado Global ──
@@ -90,25 +94,25 @@ async function syncWithSupabase() {
       throw catError;
     }
 
-    // Adaptar nombres de campos de BD a JS
+    // Adaptar nombres de campos de BD a JS (con respaldos seguros ante valores nulos)
     state.catalog = (dbCatalog || []).map(item => {
       return {
         id: item.id,
-        title: item.title,
-        type: item.type,
-        author: item.author,
-        cover: item.cover,
+        title: item.title || "Sin título",
+        type: item.type || "manga",
+        author: item.author || "Anónimo",
+        cover: item.cover || "",
         rating: parseFloat(item.rating || 5.0),
         chapters: parseInt(item.chapters || 0),
         chaptersData: item.chapters_data || {},
-        status: item.status,
+        status: item.status || "En emisión",
         views: parseInt(item.views || 0),
         genres: item.genres || [],
-        description: item.description,
-        year: item.year,
-        uploader: item.uploader,
-        lang: item.lang,
-        nsfw: item.nsfw
+        description: item.description || "",
+        year: item.year || new Date().getFullYear(),
+        uploader: item.uploader || "Comunidad",
+        lang: item.lang || "ES",
+        nsfw: !!item.nsfw
       };
     });
 
@@ -160,8 +164,14 @@ function closeModal(id) {
 // ══════════════════════════════════════════════
 // ── INICIALIZACIÓN ──
 // ══════════════════════════════════════════════
-document.addEventListener('DOMContentLoaded', async () => {
-  await loadState();
+document.addEventListener('DOMContentLoaded', () => {
+  // 1. Cargar datos locales inmediatamente para que la página sea funcional al instante
+  loadLocalFallbackData();
+
+  // 2. Ejecutar la sincronización asíncrona con Supabase en segundo plano
+  loadState().catch(err => console.warn("Error en segundo plano con Supabase:", err));
+
+  // 3. Renderizar estados iniciales de inmediato
   renderAuth();
   renderGenres();
   updateStats();
@@ -1543,43 +1553,51 @@ function updateStats() {
 
 // ── Render de listas de la Barra Lateral (Sidebar) ──
 function renderSidebarStats() {
-  var topViewsContainer = document.getElementById('sidebar-top-views');
-  var newUploadsContainer = document.getElementById('sidebar-new-uploads');
-  if (!topViewsContainer || !newUploadsContainer) return;
+  try {
+    var topViewsContainer = document.getElementById("sidebar-top-views");
+    var newUploadsContainer = document.getElementById("sidebar-new-uploads");
+    if (!topViewsContainer || !newUploadsContainer) return;
 
-  var catalogCopy = state.catalog.slice();
+    var catalogCopy = state.catalog.slice();
 
-  // 1. Los Más Vistos (Top Visitas)
-  var topViews = catalogCopy.sort(function(a, b) {
-    return (b.views || 0) - (a.views || 0);
-  }).slice(0, 5);
+    // 1. Los Mas Vistos (Top Visitas)
+    var topViews = catalogCopy.sort(function(a, b) {
+      return (b.views || 0) - (a.views || 0);
+    }).slice(0, 5);
 
-  if (topViews.length === 0) {
-    topViewsContainer.innerHTML = '<li style="padding: 10px 12px; color: #7f8c8d; font-size: 11px; text-align: center;">Sin registros.</li>';
-  } else {
-    topViewsContainer.innerHTML = topViews.map(function(m, index) {
-      return '<li class="sidebar-item" onclick="showDetail(' + m.id + ')">' +
-        '<span class="sidebar-item-num">' + (index + 1) + '</span>' +
-        '<span class="sidebar-item-title">' + m.title + '</span>' +
-        '<span class="sidebar-item-meta">' + formatViews(m.views) + '</span>' +
-      '</li>';
-    }).join('');
-  }
+    if (topViews.length === 0) {
+      topViewsContainer.innerHTML = '<li style="padding: 10px 12px; color: #7f8c8d; font-size: 11px; text-align: center;">Sin registros.</li>';
+    } else {
+      topViewsContainer.innerHTML = topViews.map(function(m, index) {
+        var mTitle = m.title || "Sin titulo";
+        var mViews = m.views || 0;
+        return '<li class="sidebar-item" onclick="showDetail(' + m.id + ')">' +
+          '<span class="sidebar-item-num">' + (index + 1) + '</span>' +
+          '<span class="sidebar-item-title">' + mTitle + '</span>' +
+          '<span class="sidebar-item-meta">' + formatViews(mViews) + '</span>' +
+        '</li>';
+      }).join('');
+    }
 
-  // 2. Recién Subidos (Últimos agregados por ID / fecha)
-  var newUploads = state.catalog.slice().sort(function(a, b) {
-    return b.id - a.id; // El ID es Date.now() en subidas locales/nuevas
-  }).slice(0, 5);
+    // 2. Recien Subidos (Ultimos agregados)
+    var newUploads = state.catalog.slice().sort(function(a, b) {
+      return b.id - a.id;
+    }).slice(0, 5);
 
-  if (newUploads.length === 0) {
-    newUploadsContainer.innerHTML = '<li style="padding: 10px 12px; color: #7f8c8d; font-size: 11px; text-align: center;">Sin registros.</li>';
-  } else {
-    newUploadsContainer.innerHTML = newUploads.map(function(m) {
-      return '<li class="sidebar-item" onclick="showDetail(' + m.id + ')">' +
-        '<span class="sidebar-item-title">' + m.title + '</span>' +
-        '<span class="sidebar-item-meta" style="background-color:#e8f8f5; color:#117a65;">' + m.type.toUpperCase() + '</span>' +
-      '</li>';
-    }).join('');
+    if (newUploads.length === 0) {
+      newUploadsContainer.innerHTML = '<li style="padding: 10px 12px; color: #7f8c8d; font-size: 11px; text-align: center;">Sin registros.</li>';
+    } else {
+      newUploadsContainer.innerHTML = newUploads.map(function(m) {
+        var mTitle = m.title || "Sin titulo";
+        var mType = m.type || "manga";
+        return '<li class="sidebar-item" onclick="showDetail(' + m.id + ')">' +
+          '<span class="sidebar-item-title">' + mTitle + '</span>' +
+          '<span class="sidebar-item-meta" style="background-color:#e8f8f5; color:#117a65;">' + mType.toUpperCase() + '</span>' +
+        '</li>';
+      }).join('');
+    }
+  } catch (err) {
+    console.error("Error al renderizar barra lateral de estadisticas:", err);
   }
 }
 
