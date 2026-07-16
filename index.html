@@ -239,8 +239,10 @@
             <input type="text" id="up-author" required placeholder="Ej: Chugong">
           </div>
           <div class="form-group">
-            <label>Géneros (separados por comas):</label>
-            <input type="text" id="up-genres" required placeholder="Ej: Acción, Aventura, Fantasía">
+            <label>Géneros (Selecciona al menos uno):</label>
+            <div class="genres-checkbox-grid" id="up-genres-selector">
+              <!-- Cargado dinámicamente desde app.js -->
+            </div>
           </div>
           <div class="form-group">
             <label>Sinopsis / Descripción:</label>
@@ -476,7 +478,9 @@
                 <input type="text" id="prof-display-name" required>
               </div>
               <div class="form-group">
-                <label>URL de Imagen de Avatar:</label>
+                <label>Imagen de Avatar:</label>
+                <input type="file" id="prof-avatar-file" accept="image/*" style="margin-bottom: 5px;">
+                <span style="font-size: 11px; color: #7f8c8d; display: block; margin-bottom: 2px;">O pega un enlace de internet (URL):</span>
                 <input type="url" id="prof-avatar-url" placeholder="Ej: https://i.imgur.com/Avatar.png">
               </div>
               <div class="form-group">
@@ -495,6 +499,6 @@
   <div class="toast-box" id="toast">Notificación</div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=2.2"></script>
+  <script src="app.js?v=2.5"></script>
 </body>
 </html>

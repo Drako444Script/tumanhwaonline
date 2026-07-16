@@ -59,6 +59,13 @@ const state = {
   sortOrder: 'desc'
 };
 
+const ALL_GENRES = [
+  "Acción", "Aventura", "Fantasía", "Romance", "Comedia", "Drama", 
+  "Recuentos de la vida", "Ciencia Ficción", "Terror", "Misterio", 
+  "Psicológico", "Sobrenatural", "Isekai", "Artes Marciales", "Magia", 
+  "Escolar", "Tragedia", "Gore", "Mecha", "Deportes", "Histórico", "Música"
+];
+
 // ── Cargar datos del sistema ──
 async function loadState() {
   try {
@@ -239,6 +246,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderFeatured();
   renderGrid();
   renderSidebarStats();
+  renderUploadGenresSelector();
 
   // Buscador
   const searchInput = document.getElementById('search-input');
@@ -276,9 +284,19 @@ function renderAuth() {
   if (!container) return;
 
   if (state.currentUser) {
+    let avatarHTML = '';
+    if (state.currentUser.avatar && state.currentUser.avatar.trim() !== '') {
+      avatarHTML = `<img src="${state.currentUser.avatar}" class="topbar-avatar" alt="Avatar">`;
+    } else {
+      const initial = state.currentUser.username[0].toUpperCase();
+      avatarHTML = `<div class="topbar-avatar-fallback">${initial}</div>`;
+    }
     container.innerHTML = `
-      <span>Hola, <a href="#" onclick="openProfileModal(); return false;"><strong class="username-tag">${state.currentUser.username}</strong></a></span>
-      <a href="#" class="logout-btn" onclick="logout(); return false;">Cerrar Sesión</a>
+      <div class="user-auth-info" onclick="openProfileModal(); return false;" style="cursor:pointer; display:inline-flex; align-items:center; gap:8px; margin-right: 12px; vertical-align: middle;">
+        ${avatarHTML}
+        <span>Hola, <strong class="username-tag">${state.currentUser.username}</strong></span>
+      </div>
+      <a href="#" class="logout-btn" onclick="logout(); return false;" style="vertical-align: middle;">Cerrar Sesión</a>
     `;
   } else {
     container.innerHTML = `
@@ -328,27 +346,43 @@ function openProfileModal() {
   document.getElementById('prof-display-name').value = state.currentUser.username;
   document.getElementById('prof-avatar-url').value = state.currentUser.avatar || '';
   document.getElementById('prof-bio').value = state.currentUser.bio || '';
+  
+  var fileInput = document.getElementById('prof-avatar-file');
+  if (fileInput) fileInput.value = '';
 
   openModal('profile-modal');
 }
 
-function saveProfileSettings(e) {
+async function saveProfileSettings(e) {
   e.preventDefault();
   if (!state.currentUser) return;
 
   var newUsername = document.getElementById('prof-display-name').value.trim();
   var newAvatar = document.getElementById('prof-avatar-url').value.trim();
   var newBio = document.getElementById('prof-bio').value.trim();
+  var fileInput = document.getElementById('prof-avatar-file');
 
-  if (newUsername) {
-    state.currentUser.username = newUsername;
-    state.currentUser.avatar = newAvatar;
-    state.currentUser.bio = newBio;
-    saveState();
-    renderAuth();
-    showToast("¡Perfil guardado con éxito!");
-    closeModal('profile-modal');
-    refreshCurrentView();
+  async function proceedSave(avatarData) {
+    if (newUsername) {
+      state.currentUser.username = newUsername;
+      state.currentUser.avatar = avatarData;
+      state.currentUser.bio = newBio;
+      saveState();
+      renderAuth();
+      showToast("¡Perfil guardado con éxito!");
+      closeModal('profile-modal');
+      refreshCurrentView();
+    }
+  }
+
+  if (fileInput && fileInput.files && fileInput.files[0]) {
+    var reader = new FileReader();
+    reader.onload = async function(evt) {
+      await proceedSave(evt.target.result);
+    };
+    reader.readAsDataURL(fileInput.files[0]);
+  } else {
+    await proceedSave(newAvatar);
   }
 }
 
@@ -492,11 +526,18 @@ function renderGenres() {
   if (!container) return;
 
   const counts = {};
+  // Inicializar todos los géneros definidos con 0
+  ALL_GENRES.forEach(g => {
+    counts[g] = 0;
+  });
+
   state.catalog.forEach(m => {
     if (m.nsfw && !state.showNSFW) return;
-    m.genres.forEach(g => {
-      counts[g] = (counts[g] || 0) + 1;
-    });
+    if (m.genres) {
+      m.genres.forEach(g => {
+        counts[g] = (counts[g] || 0) + 1;
+      });
+    }
   });
 
   const sortedGenres = Object.keys(counts).sort();
@@ -509,6 +550,27 @@ function renderGenres() {
   });
 
   container.innerHTML = html;
+}
+
+function renderUploadGenresSelector() {
+  const container = document.getElementById('up-genres-selector');
+  if (!container) return;
+
+  container.innerHTML = ALL_GENRES.map(genre => {
+    return `
+      <label class="genre-checkbox-label" id="lbl-genre-${genre}">
+        <input type="checkbox" name="up-genres-cb" value="${genre}" onchange="toggleGenreCheckbox(this)">
+        ${genre}
+      </label>
+    `;
+  }).join('');
+}
+
+function toggleGenreCheckbox(checkbox) {
+  const label = document.getElementById(`lbl-genre-${checkbox.value}`);
+  if (label) {
+    label.classList.toggle('selected', checkbox.checked);
+  }
 }
 
 // ══════════════════════════════════════════════
@@ -629,11 +691,11 @@ async function showDetail(id) {
   // 1. Incrementar visitas en Supabase (en segundo plano)
   incrementMangaViews(manga);
 
-  // Armar estrellas del rating
+  // Armar estrellas del rating en orden inverso para row-reverse CSS hover
   var starsHtml = '';
-  for (var s = 1; s <= 5; s++) {
-    var activeStar = s <= Math.round(manga.rating || 5.0) ? '★' : '☆';
-    starsHtml += '<span class="star-rating-btn" onclick="submitMangaRating(' + manga.id + ', ' + s + ')">' + activeStar + '</span>';
+  for (var s = 5; s >= 1; s--) {
+    var isStarActive = s <= Math.round(manga.rating || 5.0) ? ' active' : '';
+    starsHtml += '<span class="star-rating-btn' + isStarActive + '" onclick="submitMangaRating(' + manga.id + ', ' + s + ')">★</span>';
   }
 
   detailView.innerHTML =
@@ -1193,6 +1255,11 @@ function closeReader() {
 // ── SUBIR MANGA ──
 // ══════════════════════════════════════════════
 function openUploadModal() {
+  // Desmarcar todos los géneros
+  document.querySelectorAll('input[name="up-genres-cb"]').forEach(cb => {
+    cb.checked = false;
+    toggleGenreCheckbox(cb);
+  });
   openModal('upload-modal');
 }
 
@@ -1204,11 +1271,18 @@ async function doUpload(e) {
   var fileInput = document.getElementById('up-cover-file');
   var type = document.getElementById('up-type').value;
   var author = document.getElementById('up-author').value.trim() || "Anónimo";
-  var genresInput = document.getElementById('up-genres').value.trim();
   var description = document.getElementById('up-desc').value.trim() || "Sin descripción.";
   var nsfw = document.getElementById('up-nsfw').checked;
-  var genres = genresInput ? genresInput.split(',').map(function(g) { return g.trim(); }) : ["General"];
   var uploaderName = state.currentUser ? state.currentUser.username : "Anónimo";
+
+  var genres = [];
+  var checkedCbs = document.querySelectorAll('input[name="up-genres-cb"]:checked');
+  checkedCbs.forEach(function(cb) {
+    genres.push(cb.value);
+  });
+  if (genres.length === 0) {
+    genres = ["General"];
+  }
 
   async function saveManga(finalCover) {
     var newManga = {

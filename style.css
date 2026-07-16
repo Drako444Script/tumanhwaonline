@@ -1614,3 +1614,105 @@ input[type="file"]:hover {
     padding: 15px 10px;
   }
 }
+
+/* ════ Selector de Géneros en Subida ════ */
+.genres-checkbox-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-height: 160px;
+  overflow-y: auto;
+  border: 1px solid #eaeded;
+  padding: 10px;
+  border-radius: 4px;
+  background-color: #fcfcfc;
+}
+
+.genre-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #f2f4f4;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s ease;
+  border: 1px solid #bdc3c7;
+  color: #34495e;
+}
+
+.genre-checkbox-label:hover {
+  background-color: #eaeded;
+  border-color: #7f8c8d;
+}
+
+.genre-checkbox-label input {
+  display: none;
+}
+
+.genre-checkbox-label.selected {
+  background-color: #e74c3c;
+  color: #fff;
+  border-color: #c0392b;
+  font-weight: bold;
+}
+
+/* ════ Avatar en barra superior ════ */
+.topbar-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid #eaeded;
+}
+
+.topbar-avatar-fallback {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: #c0392b;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 11px;
+  border: 1px solid #eaeded;
+  text-shadow: 1px 1px 0px rgba(0,0,0,0.15);
+}
+
+/* ════ Calificación de Obras (Estrellas) ════ */
+.star-rating-wrap {
+  display: inline-flex;
+  flex-direction: row-reverse;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+.star-rating-btn {
+  font-size: 22px;
+  color: #bdc3c7; /* Color gris de estrella vacía */
+  cursor: pointer;
+  transition: color 0.15s ease, transform 0.1s ease;
+  user-select: none;
+}
+
+.star-rating-btn.active {
+  color: #f1c40f; /* Color amarillo oro */
+}
+
+/* Efecto hover interactivo */
+.star-rating-wrap:hover .star-rating-btn {
+  color: #bdc3c7; /* Resetea todas a gris cuando el cursor entra en el bloque */
+}
+
+.star-rating-wrap .star-rating-btn:hover,
+.star-rating-wrap .star-rating-btn:hover ~ .star-rating-btn {
+  color: #f1c40f; /* Colorea de dorado la estrella sobre la que estás y las anteriores */
+}
+
+.star-rating-btn:active {
+  transform: scale(1.2);
+}
