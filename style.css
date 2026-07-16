@@ -86,13 +86,17 @@ a:hover {
 
 .logo {
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .logo-main {
   font-size: 28px;
   font-weight: bold;
-  color: #c0392b; /* Rojo clÃ¡sico */
+  color: #c0392b; /* Rojo clásico */
   letter-spacing: -1px;
+  line-height: 1;
 }
 
 .logo-tag {
@@ -101,8 +105,13 @@ a:hover {
   color: #ffffff;
   padding: 2px 6px;
   border-radius: 3px;
-  margin-left: 5px;
   text-transform: uppercase;
+  line-height: 1.2;
+}
+
+.logo-symbol {
+  font-size: 24px;
+  line-height: 1;
 }
 
 /* Buscador ClÃ¡sico */
@@ -2174,5 +2183,56 @@ input[type="file"]:hover {
 .shoutbox-input-wrap button:hover {
   background-color: #a93226;
 }
+
+/* ── Barra de Filtros del Catálogo ── */
+.catalog-filters-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  background-color: #ffffff;
+  border: 1px solid #d6dbdf;
+  border-radius: 4px;
+  padding: 10px 15px;
+  margin-bottom: 20px;
+  align-items: center;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-group label {
+  font-size: 12px;
+  font-weight: bold;
+  color: #34495e;
+}
+
+.filter-group select {
+  padding: 6px 10px;
+  border: 1px solid #cccccc;
+  border-radius: 3px;
+  font-size: 12px;
+  background: #ffffff;
+  outline: none;
+  cursor: pointer;
+}
+
+.filter-group select:focus {
+  border-color: #c0392b;
+}
+
+@media (max-width: 768px) {
+  .catalog-filters-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .filter-group {
+    justify-content: space-between;
+  }
+}
+
 
 

@@ -57,7 +57,9 @@ const state = {
   currentPageIndex: 1,
   totalPagesCount: 0,
   sortOrder: 'desc',
-  libraryTab: 'all'
+  libraryTab: 'all',
+  sortBy: 'recent',
+  statusFilter: 'all'
 };
 
 const ALL_GENRES = [
@@ -69,11 +71,18 @@ const ALL_GENRES = [
 
 // ── Cuentas con permisos de Administrador ──
 const ADMIN_EMAILS = [
-  "brandonesau250@gmail.com"
+  "brandonesau250@gmail.com",
+  "brandonesau250@tumanhwaonline.com"
+];
+const ADMIN_USERNAMES = [
+  "brandonesau250",
+  "admin"
 ];
 
 function isAdmin() {
-  return state.currentUser && ADMIN_EMAILS.indexOf(state.currentUser.email) !== -1;
+  if (!state.currentUser) return false;
+  return ADMIN_EMAILS.indexOf(state.currentUser.email.toLowerCase()) !== -1 ||
+         ADMIN_USERNAMES.indexOf(state.currentUser.username.toLowerCase()) !== -1;
 }
 
 // ── Cargar datos del sistema ──
@@ -258,22 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderSidebarStats();
   renderUploadGenresSelector();
 
-  // 4. Suscribirse a cambios en tiempo real del Chat Comunitario si Supabase está conectado
-  if (supabaseClient) {
-    try {
-      supabaseClient
-        .channel('public:shoutbox')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'shoutbox' }, () => {
-          const content = document.getElementById('shoutbox-content');
-          if (content && content.style.display !== 'none') {
-            loadShoutboxMessages();
-          }
-        })
-        .subscribe();
-    } catch (e) {
-      console.warn("No se pudo activar el tiempo real del Chat en Supabase:", e);
-    }
-  }
+  // (Nota: El canal en tiempo real fue desactivado para ahorrar datos)
 
   // Buscador
   const searchInput = document.getElementById('search-input');
@@ -751,20 +745,41 @@ function getMangaProgress(m) {
   };
 }
 
+function triggerSearchFilters() {
+  renderGrid();
+}
+
 function renderGrid() {
   const grid = document.getElementById('manga-grid');
   if (!grid) return;
+
+  const sortSelect = document.getElementById('filter-sort');
+  const statusSelect = document.getElementById('filter-status');
+  if (sortSelect) state.sortBy = sortSelect.value;
+  if (statusSelect) state.statusFilter = statusSelect.value;
 
   let filtered = state.catalog.slice();
 
   if (!state.showNSFW) filtered = filtered.filter(m => !m.nsfw);
   if (state.filterType !== 'all') filtered = filtered.filter(m => m.type === state.filterType);
   if (state.filterGenre !== 'all') filtered = filtered.filter(m => m.genres && m.genres.includes(state.filterGenre));
+  if (state.statusFilter !== 'all') filtered = filtered.filter(m => m.status === state.statusFilter);
   if (state.searchQuery) {
     filtered = filtered.filter(m =>
       m.title.toLowerCase().includes(state.searchQuery) ||
       m.author.toLowerCase().includes(state.searchQuery)
     );
+  }
+
+  // Ordenamiento
+  if (state.sortBy === 'recent') {
+    filtered.sort((a, b) => b.id - a.id);
+  } else if (state.sortBy === 'views') {
+    filtered.sort((a, b) => (b.views || 0) - (a.views || 0));
+  } else if (state.sortBy === 'rating') {
+    filtered.sort((a, b) => (b.rating || 0.0) - (a.rating || 0.0));
+  } else if (state.sortBy === 'title') {
+    filtered.sort((a, b) => a.title.localeCompare(b.title));
   }
 
   if (filtered.length === 0) {
@@ -1112,7 +1127,8 @@ async function renderCommentsList(mangaId) {
   }
 
   container.innerHTML = list.map(function(c, index) {
-    var deleteBtn = isAdmin() ? '<button class="btn-delete-comment" onclick="deleteComment(' + mangaId + ', ' + index + ')">🗑 Borrar</button>' : '';
+    var commentId = c.id || null;
+    var deleteBtn = isAdmin() ? '<button class="btn-delete-comment" onclick="deleteComment(' + mangaId + ', ' + index + ', ' + commentId + ')">🗑 Borrar</button>' : '';
     return '<div class="comment-item">' +
       '<div class="comment-meta" style="display:flex; align-items:center; gap:8px;">' +
         '<span class="comment-author ' + (c.is_staff ? 'uploader-author' : '') + '">' + c.author + (c.is_staff ? ' [Traductor]' : '') + '</span>' +
@@ -1220,13 +1236,28 @@ function deleteLocalManga(mangaId) {
   renderSidebarStats();
 }
 
-async function deleteComment(mangaId, commentIndex) {
+async function deleteComment(mangaId, commentIndex, commentId) {
   if (!isAdmin()) {
     showToast("No tienes permisos de administrador.");
     return;
   }
   var confirmar = confirm("⚠ ADMIN: ¿Eliminar este comentario?");
   if (!confirmar) return;
+
+  if (supabaseClient && commentId) {
+    try {
+      let { error } = await supabaseClient
+        .from('comments')
+        .delete()
+        .eq('id', commentId);
+      if (error) throw error;
+      showToast("🗑 Comentario eliminado del servidor.");
+      renderCommentsList(mangaId);
+      return;
+    } catch (err) {
+      console.warn("No se pudo eliminar el comentario en Supabase:", err);
+    }
+  }
 
   // Eliminar localmente
   var list = state.comments[mangaId] || [];
@@ -1235,7 +1266,7 @@ async function deleteComment(mangaId, commentIndex) {
     state.comments[mangaId] = list;
     saveState();
     renderCommentsList(mangaId);
-    showToast("🗑 Comentario eliminado por el administrador.");
+    showToast("🗑 Comentario eliminado localmente.");
   }
 }
 
@@ -1334,6 +1365,12 @@ function openReader(chapterNum) {
           '<select id="mode-select" onchange="changeReadingMode(this.value)">' +
             '<option value="cascade"' + (state.readingMode === 'cascade' ? ' selected' : '') + '>Cascada (Vertical)</option>' +
             '<option value="single"' + (state.readingMode === 'single' ? ' selected' : '') + '>Página a Página</option>' +
+          '</select>' +
+          '<select id="theme-select" style="margin-left: 6px;" onchange="changeReaderTheme(this.value)">' +
+            '<option value="dark">Fondo Oscuro</option>' +
+            '<option value="oled">Fondo OLED (Negro)</option>' +
+            '<option value="cream">Fondo Crema</option>' +
+            '<option value="light">Fondo Claro</option>' +
           '</select>' +
         '</div>' +
         '<div class="lector-toolbar-right">' +
@@ -1489,6 +1526,25 @@ function changeReadingMode(mode) {
     singleContainer.style.display = 'block';
     window.removeEventListener('scroll', handleReaderScroll);
     updateSinglePageView();
+  }
+}
+
+function changeReaderTheme(theme) {
+  const container = document.querySelector('.lector-container');
+  if (!container) return;
+  
+  if (theme === 'oled') {
+    container.style.backgroundColor = '#000000';
+    container.style.color = '#ffffff';
+  } else if (theme === 'cream') {
+    container.style.backgroundColor = '#fdf6e3';
+    container.style.color = '#586e75';
+  } else if (theme === 'light') {
+    container.style.backgroundColor = '#ffffff';
+    container.style.color = '#333333';
+  } else { // dark
+    container.style.backgroundColor = '#1a1a1a';
+    container.style.color = '#ffffff';
   }
 }
 
@@ -2146,9 +2202,20 @@ async function loadShoutboxMessages() {
   if (!messagesBox) return;
 
   let list = [];
+  const fiveHoursAgo = Date.now() - (5 * 60 * 60 * 1000);
 
   if (supabaseClient) {
     try {
+      // Intentar limpiar mensajes antiguos en el servidor
+      try {
+        await supabaseClient
+          .from('shoutbox')
+          .delete()
+          .lt('timestamp', fiveHoursAgo);
+      } catch (dbCleanErr) {
+        console.warn("No se pudieron purgar mensajes de Supabase:", dbCleanErr);
+      }
+
       let { data, error } = await supabaseClient
         .from('shoutbox')
         .select('*')
@@ -2156,7 +2223,10 @@ async function loadShoutboxMessages() {
         .limit(50);
 
       if (error) throw error;
-      list = (data || []).reverse();
+      // Filtrar localmente por si la purga en base de datos falló
+      list = (data || [])
+        .filter(msg => !msg.timestamp || msg.timestamp > fiveHoursAgo)
+        .reverse();
     } catch (err) {
       console.warn("Error cargando chat de Supabase, usando local:", err);
       list = getLocalShoutboxMessages();
@@ -2188,16 +2258,23 @@ async function loadShoutboxMessages() {
 function getLocalShoutboxMessages() {
   try {
     let saved = localStorage.getItem('tm-shoutbox');
+    const fiveHoursAgo = Date.now() - (5 * 60 * 60 * 1000);
+    
     if (!saved) {
       const defaults = [
-        { author: "Lector_PRO", text: "¡Buenas! ¿Alguien sabe cuándo sale el próximo cap de Solo Leveling?", date: "13:01", is_admin: false },
-        { author: "SoloFan", text: "Creo que los capítulos salen los miércoles. ¡Gran trabajo del scan!", date: "13:02", is_admin: false },
-        { author: "ScanAdmin", text: "¡Hola! Así es, subimos capítulo todos los miércoles. ¡Disfruten!", date: "13:03", is_admin: true }
+        { author: "Lector_PRO", text: "¡Buenas! ¿Alguien sabe cuándo sale el próximo cap de Solo Leveling?", date: "13:01", is_admin: false, timestamp: Date.now() },
+        { author: "SoloFan", text: "Creo que los capítulos salen los miércoles. ¡Gran trabajo del scan!", date: "13:02", is_admin: false, timestamp: Date.now() },
+        { author: "ScanAdmin", text: "¡Hola! Así es, subimos capítulo todos los miércoles. ¡Disfruten!", date: "13:03", is_admin: true, timestamp: Date.now() }
       ];
       localStorage.setItem('tm-shoutbox', JSON.stringify(defaults));
       return defaults;
     }
-    return JSON.parse(saved);
+    
+    let list = JSON.parse(saved);
+    // Filtrar los de más de 5 horas
+    list = list.filter(m => m.timestamp && m.timestamp > fiveHoursAgo);
+    localStorage.setItem('tm-shoutbox', JSON.stringify(list));
+    return list;
   } catch (e) {
     return [];
   }
@@ -2220,7 +2297,8 @@ async function sendShoutboxMessage(event) {
     author: author,
     text: text,
     date: timeStr,
-    is_admin: isAdminUser
+    is_admin: isAdminUser,
+    timestamp: Date.now()
   };
 
   input.value = '';
