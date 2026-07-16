@@ -56,7 +56,8 @@ const state = {
   readingMode: 'cascade',
   currentPageIndex: 1,
   totalPagesCount: 0,
-  sortOrder: 'desc'
+  sortOrder: 'desc',
+  libraryTab: 'all'
 };
 
 const ALL_GENRES = [
@@ -257,6 +258,23 @@ document.addEventListener('DOMContentLoaded', () => {
   renderSidebarStats();
   renderUploadGenresSelector();
 
+  // 4. Suscribirse a cambios en tiempo real del Chat Comunitario si Supabase está conectado
+  if (supabaseClient) {
+    try {
+      supabaseClient
+        .channel('public:shoutbox')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'shoutbox' }, () => {
+          const content = document.getElementById('shoutbox-content');
+          if (content && content.style.display !== 'none') {
+            loadShoutboxMessages();
+          }
+        })
+        .subscribe();
+    } catch (e) {
+      console.warn("No se pudo activar el tiempo real del Chat en Supabase:", e);
+    }
+  }
+
   // Buscador
   const searchInput = document.getElementById('search-input');
   if (searchInput) {
@@ -293,18 +311,24 @@ function renderAuth() {
   if (!container) return;
 
   if (state.currentUser) {
+    if (state.currentUser.xp === undefined) state.currentUser.xp = 0;
+    if (state.currentUser.level === undefined) state.currentUser.level = 1;
+
     let avatarHTML = '';
+    const borderClass = `border-lvl-${state.currentUser.level}`;
     if (state.currentUser.avatar && state.currentUser.avatar.trim() !== '') {
-      avatarHTML = `<img src="${state.currentUser.avatar}" class="topbar-avatar" alt="Avatar">`;
+      avatarHTML = `<img src="${state.currentUser.avatar}" class="topbar-avatar ${borderClass}" alt="Avatar">`;
     } else {
       const initial = state.currentUser.username[0].toUpperCase();
-      avatarHTML = `<div class="topbar-avatar-fallback">${initial}</div>`;
+      avatarHTML = `<div class="topbar-avatar-fallback ${borderClass}">${initial}</div>`;
     }
     const adminBadge = isAdmin() ? '<span style="background:#e74c3c; color:#fff; font-size:9px; padding:2px 6px; border-radius:3px; margin-left:4px; font-weight:bold; letter-spacing:0.5px;">ADMIN</span>' : '';
+    const xpHTML = `<span class="xp-badge" title="Rango: ${getUserRankName(state.currentUser.level)}">Lvl ${state.currentUser.level} (${state.currentUser.xp} XP)</span>`;
+    
     container.innerHTML = `
       <div class="user-auth-info" onclick="openProfileModal(); return false;" style="cursor:pointer; display:inline-flex; align-items:center; gap:8px; margin-right: 12px; vertical-align: middle;">
         ${avatarHTML}
-        <span>Hola, <strong class="username-tag">${state.currentUser.username}</strong>${adminBadge}</span>
+        <span>Hola, <strong class="username-tag">${state.currentUser.username}</strong>${adminBadge}${xpHTML}</span>
       </div>
       <a href="#" class="logout-btn" onclick="logout(); return false;" style="vertical-align: middle;">Cerrar Sesión</a>
     `;
@@ -332,18 +356,26 @@ function openProfileModal() {
   var avatarImg = document.getElementById('profile-avatar-img');
   var avatarDiv = document.getElementById('profile-avatar');
 
+  const borderClass = `border-lvl-${state.currentUser.level || 1}`;
+  // Limpiar clases previas
+  avatarImg.className = '';
+  avatarDiv.className = '';
+
   if (state.currentUser.avatar && state.currentUser.avatar.trim() !== '') {
     avatarImg.src = state.currentUser.avatar;
     avatarImg.style.display = 'block';
+    avatarImg.classList.add(borderClass);
     avatarDiv.style.display = 'none';
   } else {
     avatarImg.style.display = 'none';
     avatarDiv.style.display = 'flex';
+    avatarDiv.classList.add(borderClass);
     avatarDiv.textContent = state.currentUser.username[0].toUpperCase();
   }
 
   // Info del usuario
-  document.getElementById('profile-username').textContent = state.currentUser.username;
+  const rankName = getUserRankName(state.currentUser.level || 1);
+  document.getElementById('profile-username').innerHTML = `${state.currentUser.username} <span class="xp-badge" style="font-size:11px; padding:3px 10px;">Lvl ${state.currentUser.level || 1} [${rankName}]</span>`;
   document.getElementById('profile-email').textContent = state.currentUser.email;
   document.getElementById('profile-bio-text').textContent = state.currentUser.bio || 'Sin biografía.';
 
@@ -411,7 +443,10 @@ function doLogin(e) {
     var email = (existingUser && existingUser.username === username) ? existingUser.email : username + '@tumanhwaonline.com';
     var avatar = (existingUser && existingUser.username === username) ? (existingUser.avatar || '') : '';
     var bio = (existingUser && existingUser.username === username) ? (existingUser.bio || '') : '';
-    state.currentUser = { username: username, email: email, avatar: avatar, bio: bio };
+    var xp = (existingUser && existingUser.username === username) ? (existingUser.xp || 0) : 0;
+    var level = (existingUser && existingUser.username === username) ? (existingUser.level || 1) : 1;
+    
+    state.currentUser = { username: username, email: email, avatar: avatar, bio: bio, xp: xp, level: level };
     saveState();
     renderAuth();
     closeModal('login-modal');
@@ -426,7 +461,7 @@ function doRegister(e) {
   const username = document.getElementById('reg-user').value.trim();
   const email = document.getElementById('reg-email').value.trim();
   if (username && email) {
-    state.currentUser = { username: username, email: email, avatar: '', bio: '' };
+    state.currentUser = { username: username, email: email, avatar: '', bio: '', xp: 0, level: 1 };
     saveState();
     renderAuth();
     closeModal('register-modal');
@@ -512,6 +547,9 @@ function addToHistory(manga, chapterNum) {
 // ══════════════════════════════════════════════
 // ── RECOMENDADOS ──
 // ══════════════════════════════════════════════
+let carouselInterval = null;
+let currentSlideIndex = 0;
+
 function renderFeatured() {
   const mainCol = document.getElementById('main-content');
   if (!mainCol) return;
@@ -520,26 +558,80 @@ function renderFeatured() {
   if (oldSec) oldSec.remove();
 
   const available = state.catalog.filter(m => !m.nsfw || state.showNSFW);
-  const featured = available.slice(0, 4);
+  const featured = available.slice(0, 5);
   if (featured.length === 0) return;
 
   const recDiv = document.createElement('div');
   recDiv.id = 'rec-section';
-  recDiv.className = 'recommended-section';
-  recDiv.innerHTML = '<div class="recommended-title">Recomendaciones de la Semana</div><div class="recommended-grid">' +
-    featured.map(m =>
-      '<div class="recommended-item" onclick="showDetail(' + m.id + ')">' +
-        '<img class="rec-cover" src="' + m.cover + '" alt="">' +
-        '<div class="rec-info">' +
-          '<div class="rec-title">' + m.title + '</div>' +
-          '<div class="rec-meta">★ ' + m.rating + ' · ' + m.type.toUpperCase() + '</div>' +
-        '</div>' +
-      '</div>'
-    ).join('') +
-  '</div>';
+  recDiv.className = 'carousel-container';
+
+  let slidesHtml = '';
+  let dotsHtml = '';
+
+  featured.forEach((m, idx) => {
+    const activeClass = idx === 0 ? ' active' : '';
+    slidesHtml += `
+      <div class="carousel-slide${activeClass}" onclick="showDetail(${m.id})" id="slide-${idx}">
+        <div class="carousel-cover-bg" style="background-image: url('${m.cover}');"></div>
+        <div class="carousel-info">
+          <div class="carousel-meta">${m.type.toUpperCase()} · ★ ${m.rating.toFixed(1)}</div>
+          <div class="carousel-title">${m.title}</div>
+          <div class="carousel-desc">${m.description || 'Sin descripción.'}</div>
+        </div>
+      </div>
+    `;
+    dotsHtml += `<span class="carousel-dot${activeClass}" onclick="event.stopPropagation(); setCarouselSlide(${idx})" id="dot-${idx}"></span>`;
+  });
+
+  recDiv.innerHTML = `
+    ${slidesHtml}
+    <button class="carousel-btn prev" onclick="event.stopPropagation(); changeCarouselSlide(-1)">❮</button>
+    <button class="carousel-btn next" onclick="event.stopPropagation(); changeCarouselSlide(1)">❯</button>
+    <div class="carousel-dots">
+      ${dotsHtml}
+    </div>
+  `;
 
   mainCol.insertBefore(recDiv, mainCol.firstChild);
+  currentSlideIndex = 0;
+  
+  startCarouselTimer();
 }
+
+function startCarouselTimer() {
+  if (carouselInterval) clearInterval(carouselInterval);
+  carouselInterval = setInterval(() => {
+    const el = document.getElementById('rec-section');
+    if (el && el.style.display !== 'none') {
+      changeCarouselSlide(1);
+    }
+  }, 5000);
+}
+
+function setCarouselSlide(idx) {
+  const slides = document.querySelectorAll('.carousel-slide');
+  const dots = document.querySelectorAll('.carousel-dot');
+  if (slides.length === 0) return;
+
+  if (idx >= slides.length) idx = 0;
+  if (idx < 0) idx = slides.length - 1;
+
+  currentSlideIndex = idx;
+
+  slides.forEach((slide, i) => {
+    slide.classList.toggle('active', i === idx);
+  });
+  dots.forEach((dot, i) => {
+    dot.classList.toggle('active', i === idx);
+  });
+
+  startCarouselTimer();
+}
+
+function changeCarouselSlide(direction) {
+  setCarouselSlide(currentSlideIndex + direction);
+}
+
 
 // ══════════════════════════════════════════════
 // ── GÉNEROS ──
@@ -646,6 +738,19 @@ function toggleNSFWFilter(element) {
 // ══════════════════════════════════════════════
 // ── RENDER CATÁLOGO (GRILLA) ──
 // ══════════════════════════════════════════════
+function getMangaProgress(m) {
+  if (!m || !m.chapters || m.chapters === 0) return { pct: 0, text: "" };
+  const readList = state.readChapters[m.id] || [];
+  const readCount = readList.length;
+  if (readCount === 0) return { pct: 0, text: "" };
+  
+  const pct = Math.min(100, Math.round((readCount / m.chapters) * 100));
+  return {
+    pct: pct,
+    text: `${readCount}/${m.chapters} caps`
+  };
+}
+
 function renderGrid() {
   const grid = document.getElementById('manga-grid');
   if (!grid) return;
@@ -670,12 +775,20 @@ function renderGrid() {
   grid.innerHTML = filtered.map(m => {
     const libSection = state.library[m.id];
     const badgeHTML = libSection ? '<span class="library-badge ' + libSection + '">' + libSection + '</span>' : '';
+    const progress = getMangaProgress(m);
+    const progressHTML = progress.pct > 0 ? `
+      <div class="card-progress-bar-wrap">
+        <div class="card-progress-bar" style="width: ${progress.pct}%"></div>
+      </div>
+      <span class="card-progress-text">${progress.text}</span>
+    ` : '';
 
     return '<div class="manga-card" onclick="showDetail(' + m.id + ')">' +
       '<div class="card-cover-wrap">' +
         '<img src="' + m.cover + '" alt="' + m.title + '" class="card-cover" onerror="this.src=\'https://placehold.co/300x420/555/fff?text=Sin+Portada\'">' +
         '<span class="badge-tipo">' + m.type + '</span>' +
         (m.nsfw ? '<span class="badge-nsfw">+18</span>' : '') +
+        progressHTML +
       '</div>' +
       '<div class="card-title" title="' + m.title + '">' + m.title + ' ' + badgeHTML + '</div>' +
       '<div class="card-meta">' +
@@ -807,6 +920,7 @@ async function submitMangaRating(mangaId, stars) {
   manga.rating = newRating;
 
   showToast("¡Has calificado esta obra con " + stars + " estrellas!");
+  addXP(5);
   showDetail(mangaId); // Recargar panel de detalles
 
   if (supabaseClient) {
@@ -870,6 +984,100 @@ function saveToLibrarySection() {
   closeModal('library-modal');
   showDetail(state.selectedManga.id);
   showToast('Añadido a Biblioteca en sección "' + section.toUpperCase() + '"');
+}
+
+// ── Vistas y Controles de Mi Biblioteca ──
+
+function showLibraryView(element) {
+  state.currentView = 'library';
+  state.selectedManga = null;
+
+  // Ajustar visibilidad de vistas principales
+  document.getElementById('catalog-view').style.display = 'none';
+  document.getElementById('detail-view').style.display = 'none';
+  document.getElementById('reader-view').style.display = 'none';
+  document.getElementById('library-view').style.display = 'block';
+  document.getElementById('sidebar').style.display = 'none'; // Ocultar sidebar para más espacio
+
+  // Ocultar sección de recomendados e historial
+  var recSec = document.getElementById('rec-section');
+  if (recSec) recSec.style.display = 'none';
+  var histSec = document.getElementById('history-section-el');
+  if (histSec) histSec.style.display = 'none';
+
+  // Resaltar nav link activo
+  document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+  if (element) {
+    element.classList.add('active');
+  } else {
+    var libLink = document.getElementById('nav-btn-library');
+    if (libLink) libLink.classList.add('active');
+  }
+
+  // Cerrar menú móvil si está abierto
+  var menu = document.getElementById('nav-links-menu');
+  if (menu) menu.classList.remove('show');
+
+  // Renderizar contenido
+  renderLibraryGrid();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function setLibraryTab(tab, element) {
+  state.libraryTab = tab;
+  
+  // Toggle tab activo
+  document.querySelectorAll('.lib-tab').forEach(btn => btn.classList.remove('active'));
+  if (element) element.classList.add('active');
+  
+  renderLibraryGrid();
+}
+
+function renderLibraryGrid() {
+  const grid = document.getElementById('library-grid');
+  if (!grid) return;
+
+  // Filtrar catálogo por obras que estén guardadas en la biblioteca
+  let inLibrary = state.catalog.filter(m => state.library[m.id] !== undefined);
+
+  // Filtrar según el tab activo
+  if (state.libraryTab !== 'all') {
+    inLibrary = inLibrary.filter(m => state.library[m.id] === state.libraryTab);
+  }
+
+  if (inLibrary.length === 0) {
+    grid.innerHTML = `<div style="grid-column: 1/-1; padding: 50px; text-align: center; color: #7f8c8d;">
+      <div style="font-size: 40px; margin-bottom: 10px;">📚</div>
+      No tienes obras en esta sección de tu biblioteca.
+    </div>`;
+    return;
+  }
+
+  grid.innerHTML = inLibrary.map(m => {
+    const libSection = state.library[m.id];
+    const badgeHTML = libSection ? '<span class="library-badge ' + libSection + '">' + libSection + '</span>' : '';
+    const progress = getMangaProgress(m);
+    const progressHTML = progress.pct > 0 ? `
+      <div class="card-progress-bar-wrap">
+        <div class="card-progress-bar" style="width: ${progress.pct}%"></div>
+      </div>
+      <span class="card-progress-text">${progress.text}</span>
+    ` : '';
+
+    return '<div class="manga-card" onclick="showDetail(' + m.id + ')">' +
+      '<div class="card-cover-wrap">' +
+        '<img src="' + m.cover + '" alt="' + m.title + '" class="card-cover" onerror="this.src=\'https://placehold.co/300x420/555/fff?text=Sin+Portada\'">' +
+        '<span class="badge-tipo">' + m.type + '</span>' +
+        (m.nsfw ? '<span class="badge-nsfw">+18</span>' : '') +
+        progressHTML +
+      '</div>' +
+      '<div class="card-title" title="' + m.title + '">' + m.title + ' ' + badgeHTML + '</div>' +
+      '<div class="card-meta">' +
+        '<span>★ ' + m.rating + '</span>' +
+        '<span>Cap: ' + m.chapters + '</span>' +
+      '</div>' +
+    '</div>';
+  }).join('');
 }
 
 // ══════════════════════════════════════════════
@@ -941,6 +1149,7 @@ async function addComment(mangaId) {
       textInput.value = '';
       await renderCommentsList(mangaId);
       showToast("Comentario enviado.");
+      addXP(5);
     } catch (err) {
       console.warn("No se pudo guardar comentario en Supabase:", err);
       saveCommentLocalFallback(mangaId, author, text, isStaff);
@@ -958,6 +1167,7 @@ function saveCommentLocalFallback(mangaId, author, text, isStaff) {
   if (textInput) textInput.value = '';
   renderCommentsList(mangaId);
   showToast("Comentario guardado localmente.");
+  addXP(5);
 }
 
 // ══════════════════════════════════════════════
@@ -1044,6 +1254,7 @@ function openReader(chapterNum) {
   if (state.readChapters[manga.id].indexOf(chapterNum) === -1) {
     state.readChapters[manga.id].push(chapterNum);
     saveState();
+    addXP(10);
   }
 
   document.getElementById('detail-view').style.display = 'none';
@@ -1241,6 +1452,7 @@ async function addReaderComment(mangaId, chapterNum) {
       textInput.value = '';
       await renderReaderCommentsList(mangaId, chapterNum);
       showToast("Comentario publicado.");
+      addXP(5);
     } catch (err) {
       console.warn("No se pudo subir el comentario del lector a Supabase:", err);
       saveReaderCommentLocalFallback(key, author, text, isStaff);
@@ -1258,6 +1470,7 @@ function saveReaderCommentLocalFallback(key, author, text, isStaff) {
   if (textInput) textInput.value = '';
   renderReaderCommentsList(state.selectedManga.id, state.currentChapter);
   showToast("Comentario guardado localmente.");
+  addXP(5);
 }
 
 // ── Modos de lectura ──
@@ -1673,6 +1886,9 @@ function goHome() {
   document.getElementById('detail-view').style.display = 'none';
   document.getElementById('reader-view').style.display = 'none';
   document.getElementById('catalog-view').style.display = 'block';
+  
+  var libView = document.getElementById('library-view');
+  if (libView) libView.style.display = 'none';
 
   var recSec = document.getElementById('rec-section');
   if (recSec) recSec.style.display = 'block';
@@ -1682,6 +1898,16 @@ function goHome() {
   // Cerrar menú móvil
   var menu = document.getElementById('nav-links-menu');
   if (menu) menu.classList.remove('show');
+
+  // Ajustar enlaces de navegación activos
+  document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+  var allNavs = document.querySelectorAll('.nav-link');
+  // Encontrar el link que recarga "Inicio"
+  allNavs.forEach(function(l) {
+    if (l.textContent.trim() === "Inicio") {
+      l.classList.add('active');
+    }
+  });
 
   renderHistory();
   document.getElementById('sidebar').style.display = window.innerWidth > 768 ? 'block' : 'none';
@@ -1830,6 +2056,46 @@ function renderSidebarStats() {
   }
 }
 
+function addXP(amount) {
+  if (!state.currentUser) return;
+  
+  if (state.currentUser.xp === undefined) state.currentUser.xp = 0;
+  if (state.currentUser.level === undefined) state.currentUser.level = 1;
+  
+  state.currentUser.xp += amount;
+  
+  let newLevel = 1;
+  const xp = state.currentUser.xp;
+  if (xp >= 700) newLevel = 5;
+  else if (xp >= 350) newLevel = 4;
+  else if (xp >= 150) newLevel = 3;
+  else if (xp >= 50) newLevel = 2;
+  
+  if (newLevel > state.currentUser.level) {
+    state.currentUser.level = newLevel;
+    showToast(`🎉 ¡Subiste de Nivel! Ahora eres Nivel ${newLevel} [${getUserRankName(newLevel)}]`);
+  }
+  
+  saveState();
+  renderAuth();
+  
+  var profileModal = document.getElementById('profile-modal');
+  if (profileModal && profileModal.style.display === 'flex') {
+    openProfileModal();
+  }
+}
+
+function getUserRankName(lvl) {
+  switch(lvl) {
+    case 1: return "Novato";
+    case 2: return "Lector Aprendiz";
+    case 3: return "Explorador de Mazmorras";
+    case 4: return "Otaku Consagrado";
+    case 5: return "Leyenda del Manhwa";
+    default: return "Novato";
+  }
+}
+
 function formatViews(views) {
   var v = parseInt(views || 0);
   if (v >= 1000000) return (v / 1000000).toFixed(1) + 'M';
@@ -1852,4 +2118,136 @@ function debounce(fn, delay) {
     clearTimeout(timer);
     timer = setTimeout(function() { fn.apply(null, args); }, delay);
   };
+}
+
+// ══════════════════════════════════════════════
+// ── CHAT COMUNITARIO / SHOUTBOX ──
+// ══════════════════════════════════════════════
+
+let shoutboxLoadedOnce = false;
+
+function toggleShoutbox() {
+  const content = document.getElementById('shoutbox-content');
+  const icon = document.getElementById('shoutbox-toggle-icon');
+  if (!content || !icon) return;
+
+  if (content.style.display === 'none') {
+    content.style.display = 'flex';
+    icon.textContent = '▼';
+    loadShoutboxMessages();
+  } else {
+    content.style.display = 'none';
+    icon.textContent = '▲';
+  }
+}
+
+async function loadShoutboxMessages() {
+  const messagesBox = document.getElementById('shoutbox-messages');
+  if (!messagesBox) return;
+
+  let list = [];
+
+  if (supabaseClient) {
+    try {
+      let { data, error } = await supabaseClient
+        .from('shoutbox')
+        .select('*')
+        .order('id', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+      list = (data || []).reverse();
+    } catch (err) {
+      console.warn("Error cargando chat de Supabase, usando local:", err);
+      list = getLocalShoutboxMessages();
+    }
+  } else {
+    list = getLocalShoutboxMessages();
+  }
+
+  messagesBox.innerHTML = list.map(msg => {
+    const isMine = state.currentUser && state.currentUser.username === msg.author;
+    const mineClass = isMine ? ' mine' : '';
+    const adminClass = msg.is_admin ? ' admin' : '';
+    const authorLabel = msg.is_admin ? 'Staff' : (isMine ? 'Tú' : msg.author);
+
+    return `
+      <div class="shoutbox-msg${mineClass}">
+        <div class="shoutbox-msg-meta">
+          <span class="shoutbox-msg-author${adminClass}">${authorLabel}</span>
+          <span>${msg.date}</span>
+        </div>
+        <div class="shoutbox-msg-text">${msg.text}</div>
+      </div>
+    `;
+  }).join('');
+
+  messagesBox.scrollTop = messagesBox.scrollHeight;
+}
+
+function getLocalShoutboxMessages() {
+  try {
+    let saved = localStorage.getItem('tm-shoutbox');
+    if (!saved) {
+      const defaults = [
+        { author: "Lector_PRO", text: "¡Buenas! ¿Alguien sabe cuándo sale el próximo cap de Solo Leveling?", date: "13:01", is_admin: false },
+        { author: "SoloFan", text: "Creo que los capítulos salen los miércoles. ¡Gran trabajo del scan!", date: "13:02", is_admin: false },
+        { author: "ScanAdmin", text: "¡Hola! Así es, subimos capítulo todos los miércoles. ¡Disfruten!", date: "13:03", is_admin: true }
+      ];
+      localStorage.setItem('tm-shoutbox', JSON.stringify(defaults));
+      return defaults;
+    }
+    return JSON.parse(saved);
+  } catch (e) {
+    return [];
+  }
+}
+
+async function sendShoutboxMessage(event) {
+  event.preventDefault();
+  const input = document.getElementById('shoutbox-msg-input');
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+
+  const author = state.currentUser ? state.currentUser.username : "Anónimo";
+  const isAdminUser = isAdmin();
+  
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  const newMsg = {
+    author: author,
+    text: text,
+    date: timeStr,
+    is_admin: isAdminUser
+  };
+
+  input.value = '';
+
+  if (supabaseClient) {
+    try {
+      let { error } = await supabaseClient
+        .from('shoutbox')
+        .insert([newMsg]);
+
+      if (error) throw error;
+      await loadShoutboxMessages();
+      addXP(5);
+    } catch (err) {
+      console.warn("Fallo subida a Supabase, guardando localmente:", err);
+      saveLocalShoutboxMessage(newMsg);
+    }
+  } else {
+    saveLocalShoutboxMessage(newMsg);
+  }
+}
+
+function saveLocalShoutboxMessage(msg) {
+  let list = getLocalShoutboxMessages();
+  list.push(msg);
+  if (list.length > 50) list.shift();
+  localStorage.setItem('tm-shoutbox', JSON.stringify(list));
+  loadShoutboxMessages();
+  addXP(5);
 }

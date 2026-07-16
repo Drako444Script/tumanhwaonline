@@ -43,6 +43,7 @@
         <a href="#" class="nav-link" onclick="setFilterType('manhwa', this)">Manhwas</a>
         <a href="#" class="nav-link" onclick="setFilterType('manhua', this)">Manhuas</a>
         <a href="#" class="nav-link" onclick="setFilterType('novel', this)">Novelas</a>
+        <a href="#" class="nav-link" id="nav-btn-library" onclick="showLibraryView(this)">Mi Biblioteca</a>
         <a href="#" class="nav-link text-red" onclick="toggleNSFWFilter(this)">Zona +18</a>
       </div>
       <button class="btn-subir" id="nav-btn-subir" onclick="openUploadModal()">+ Subir Manga</button>
@@ -60,6 +61,20 @@
         <div class="section-title">Últimas Publicaciones de la Comunidad</div>
         <div class="manga-grid" id="manga-grid">
           <!-- Las tarjetas de manga se cargan dinámicamente -->
+        </div>
+      </div>
+
+      <!-- Vista de Biblioteca -->
+      <div id="library-view" style="display: none;">
+        <div class="section-title">Mi Biblioteca Personal</div>
+        <div class="library-tabs">
+          <button class="lib-tab active" onclick="setLibraryTab('all', this)">Todos</button>
+          <button class="lib-tab" onclick="setLibraryTab('leyendo', this)">Leyendo</button>
+          <button class="lib-tab" onclick="setLibraryTab('pendiente', this)">Pendientes</button>
+          <button class="lib-tab" onclick="setLibraryTab('completado', this)">Completados</button>
+        </div>
+        <div class="manga-grid" id="library-grid">
+          <!-- Obras de biblioteca se cargan dinámicamente -->
         </div>
       </div>
 
@@ -501,6 +516,23 @@
 
   <!-- Toast (Notificaciones simples) -->
   <div class="toast-box" id="toast">Notificación</div>
+
+  <!-- Shoutbox (Chat Comunitario Flotante) -->
+  <div class="shoutbox-widget" id="shoutbox-widget">
+    <div class="shoutbox-header" onclick="toggleShoutbox()">
+      <span class="shoutbox-title">💬 Chat Comunitario</span>
+      <span id="shoutbox-toggle-icon">▲</span>
+    </div>
+    <div class="shoutbox-content" id="shoutbox-content" style="display: none;">
+      <div class="shoutbox-messages" id="shoutbox-messages">
+        <!-- Mensajes cargados por JS -->
+      </div>
+      <form class="shoutbox-input-wrap" onsubmit="sendShoutboxMessage(event)">
+        <input type="text" id="shoutbox-msg-input" placeholder="Escribe un mensaje..." required maxlength="150" autocomplete="off">
+        <button type="submit" class="btn-shoutbox-send">Enviar</button>
+      </form>
+    </div>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js?v=2.6"></script>
