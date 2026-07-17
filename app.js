@@ -147,6 +147,10 @@ function loadLocalFallbackData() {
     } else {
       state.catalog = [];
     }
+    if (state.catalog.length === 0) {
+      state.catalog = getDefaultSeedCatalog();
+      saveState();
+    }
   } catch (e) {
     console.warn("Error parseando catálogo local, reseteando:", e);
     state.catalog = [];
@@ -294,6 +298,23 @@ document.addEventListener('DOMContentLoaded', () => {
       sidebar.style.display = window.innerWidth > 768 ? 'block' : 'none';
     }
   });
+
+  // Cambiar etiquetas dinámicamente al seleccionar tipo de obra en modal de subida
+  const typeSelect = document.getElementById('up-type');
+  if (typeSelect) {
+    typeSelect.addEventListener('change', function() {
+      const authorInput = document.getElementById('up-author');
+      if (authorInput && authorInput.previousElementSibling) {
+        if (this.value === 'anime') {
+          authorInput.previousElementSibling.textContent = 'Estudio de Animación / Autor:';
+          authorInput.placeholder = 'Ej: ufotable / Kyoto Animation';
+        } else {
+          authorInput.previousElementSibling.textContent = 'Autor:';
+          authorInput.placeholder = 'Ej: Chugong';
+        }
+      }
+    });
+  }
 });
 
 // ══════════════════════════════════════════════
@@ -738,9 +759,10 @@ function getMangaProgress(m) {
   if (readCount === 0) return { pct: 0, text: "" };
   
   const pct = Math.min(100, Math.round((readCount / m.chapters) * 100));
+  const suffix = m.type === 'anime' ? 'eps' : 'caps';
   return {
     pct: pct,
-    text: `${readCount}/${m.chapters} caps`
+    text: `${readCount}/${m.chapters} ${suffix}`
   };
 }
 
@@ -797,17 +819,21 @@ function renderGrid() {
       <span class="card-progress-text">${progress.text}</span>
     ` : '';
 
+    const badgeTipoClass = m.type === 'anime' ? 'badge-tipo badge-anime' : 'badge-tipo';
+    const badgeTipoText = m.type === 'anime' ? '📺 anime' : m.type;
+    const countLabel = m.type === 'anime' ? 'Ep' : 'Cap';
+
     return '<div class="manga-card" onclick="showDetail(' + m.id + ')">' +
       '<div class="card-cover-wrap">' +
         '<img src="' + m.cover + '" alt="' + m.title + '" class="card-cover" onerror="this.src=\'https://placehold.co/300x420/555/fff?text=Sin+Portada\'">' +
-        '<span class="badge-tipo">' + m.type + '</span>' +
+        '<span class="' + badgeTipoClass + '">' + badgeTipoText + '</span>' +
         (m.nsfw ? '<span class="badge-nsfw">+18</span>' : '') +
         progressHTML +
       '</div>' +
       '<div class="card-title" title="' + m.title + '">' + m.title + ' ' + badgeHTML + '</div>' +
       '<div class="card-meta">' +
         '<span>★ ' + m.rating + '</span>' +
-        '<span>Cap: ' + m.chapters + '</span>' +
+        '<span>' + countLabel + ': ' + m.chapters + '</span>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -848,6 +874,12 @@ async function showDetail(id) {
     starsHtml += '<span class="star-rating-btn' + isStarActive + '" onclick="submitMangaRating(' + manga.id + ', ' + s + ')">★</span>';
   }
 
+  const isAnime = manga.type === 'anime';
+  const labelAutor = isAnime ? 'Estudio / Director:' : 'Autor:';
+  const labelAction = isAnime ? 'Ver Primer Episodio' : 'Leer Primer Capítulo';
+  const labelListTitle = isAnime ? 'Lista de Episodios' : 'Lista de Capítulos';
+  const labelAddButton = isAnime ? '+ Agregar Episodio' : '+ Agregar Capítulo';
+
   detailView.innerHTML =
     '<div class="manga-detail">' +
       '<button class="btn-classic-grey back-btn" style="margin-bottom:15px;" onclick="goHome()">← Volver al listado</button>' +
@@ -858,7 +890,7 @@ async function showDetail(id) {
         '<div class="detail-info">' +
           '<h1 class="detail-title">' + manga.title + '</h1>' +
           '<table class="detail-meta-table">' +
-            '<tr><td>Autor:</td><td>' + manga.author + '</td></tr>' +
+            '<tr><td>' + labelAutor + '</td><td>' + manga.author + '</td></tr>' +
             '<tr><td>Tipo:</td><td style="text-transform:uppercase;"><strong>' + manga.type + '</strong></td></tr>' +
             '<tr><td>Géneros:</td><td>' + manga.genres.join(', ') + '</td></tr>' +
             '<tr><td>Subido por:</td><td>' + manga.uploader + '</td></tr>' +
@@ -868,7 +900,7 @@ async function showDetail(id) {
             '<tr><td>Puntuar obra:</td><td><div class="star-rating-wrap">' + starsHtml + '</div></td></tr>' +
           '</table>' +
           '<div class="detail-actions">' +
-            '<button class="btn-classic-red" onclick="startReading()">Leer Primer Capítulo</button>' +
+            '<button class="btn-classic-red" onclick="startReading()">' + labelAction + '</button>' +
             '<button class="btn-classic-grey" onclick="openLibraryModal(' + manga.id + ')">' + (libSection ? '★ Cambiar Estado' : '☆ Agregar a Biblioteca') + '</button>' +
             '<button class="btn-classic-grey" onclick="startDownloadSimulation()">↓ Descargar</button>' +
             (isAdmin() ? '<button class="btn-classic-grey btn-admin-delete" style="background-color:#e74c3c; color:#fff; border-color:#c0392b;" onclick="deleteManga(' + manga.id + ')">🗑 Eliminar Obra (Admin)</button>' : '') +
@@ -877,8 +909,8 @@ async function showDetail(id) {
       '</div>' +
       '<div class="detail-synopsis"><strong>Sinopsis:</strong><br><br>' + manga.description + '</div>' +
       '<div class="chapters-header-row">' +
-        '<div class="section-title" style="margin-bottom:0; border:none; padding:0;">Lista de Capítulos</div>' +
-        '<button class="btn-agregar-cap" onclick="openUploadChapterModal()">+ Agregar Capítulo</button>' +
+        '<div class="section-title" style="margin-bottom:0; border:none; padding:0;">' + labelListTitle + '</div>' +
+        '<button class="btn-agregar-cap" onclick="openUploadChapterModal()">' + labelAddButton + '</button>' +
       '</div>' +
       '<ul class="chapter-list">' + renderChaptersList(manga) + '</ul>' +
       '<div class="comments-section">' +
@@ -896,11 +928,17 @@ async function showDetail(id) {
   // Cargar comentarios
   renderCommentsList(manga.id);
 
-  // Listeners de capítulos
+  // Listeners de capítulos/episodios
   document.querySelectorAll('.chapter-row').forEach(row => {
     row.addEventListener('click', () => {
       var num = parseInt(row.getAttribute('data-chapter'));
-      if (num) openReader(num);
+      if (num) {
+        if (manga.type === 'anime') {
+          openVideoPlayer(manga.id, num);
+        } else {
+          openReader(num);
+        }
+      }
     });
   });
 
@@ -953,11 +991,15 @@ async function submitMangaRating(mangaId, stars) {
 
 function startReading() {
   if (state.selectedManga) {
-    // Si tiene capítulos subidos, leer el primero. Si no, avisar.
     if (state.selectedManga.chapters >= 1) {
-      openReader(1);
+      if (state.selectedManga.type === 'anime') {
+        openVideoPlayer(state.selectedManga.id, 1);
+      } else {
+        openReader(1);
+      }
     } else {
-      showToast("Aún no hay capítulos subidos para esta obra.");
+      var label = state.selectedManga.type === 'anime' ? 'episodios' : 'capítulos';
+      showToast("Aún no hay " + label + " subidos para esta obra.");
     }
   }
 }
@@ -965,9 +1007,12 @@ function startReading() {
 function renderChaptersList(manga) {
   var html = '';
   var total = manga.chapters;
+  var isAnime = manga.type === 'anime';
+  var labelName = isAnime ? 'Episodio' : 'Capítulo';
+  var placeholderText = isAnime ? 'No hay episodios todavía. ¡Sube el primero presionando "+ Agregar Episodio"!' : 'No hay capítulos todavía. ¡Sube el primero presionando "+ Agregar Capítulo"!';
   
   if (total === 0) {
-    return '<li style="padding:15px; color:#888; text-align:center; font-size:12px; list-style:none;">No hay capítulos todavía. ¡Sube el primero presionando "+ Agregar Capítulo"!</li>';
+    return '<li style="padding:15px; color:#888; text-align:center; font-size:12px; list-style:none;">' + placeholderText + '</li>';
   }
 
   for (var i = 0; i < total; i++) {
@@ -975,7 +1020,7 @@ function renderChaptersList(manga) {
     var readChaps = state.readChapters[manga.id] || [];
     var isRead = readChaps.indexOf(num) !== -1;
     html += '<li class="chapter-row ' + (isRead ? 'read' : '') + '" data-chapter="' + num + '">' +
-      '<div><span class="chapter-name">Capítulo ' + num + '</span> <span class="chapter-uploader">por ' + manga.uploader + '</span></div>' +
+      '<div><span class="chapter-name">' + labelName + ' ' + num + '</span> <span class="chapter-uploader">por ' + manga.uploader + '</span></div>' +
       '<span class="chapter-date">Hace ' + i + 'd</span></li>';
   }
   return html;
@@ -1078,17 +1123,21 @@ function renderLibraryGrid() {
       <span class="card-progress-text">${progress.text}</span>
     ` : '';
 
+    const badgeTipoClass = m.type === 'anime' ? 'badge-tipo badge-anime' : 'badge-tipo';
+    const badgeTipoText = m.type === 'anime' ? '📺 anime' : m.type;
+    const countLabel = m.type === 'anime' ? 'Ep' : 'Cap';
+
     return '<div class="manga-card" onclick="showDetail(' + m.id + ')">' +
       '<div class="card-cover-wrap">' +
         '<img src="' + m.cover + '" alt="' + m.title + '" class="card-cover" onerror="this.src=\'https://placehold.co/300x420/555/fff?text=Sin+Portada\'">' +
-        '<span class="badge-tipo">' + m.type + '</span>' +
+        '<span class="' + badgeTipoClass + '">' + badgeTipoText + '</span>' +
         (m.nsfw ? '<span class="badge-nsfw">+18</span>' : '') +
         progressHTML +
       '</div>' +
       '<div class="card-title" title="' + m.title + '">' + m.title + ' ' + badgeHTML + '</div>' +
       '<div class="card-meta">' +
         '<span>★ ' + m.rating + '</span>' +
-        '<span>Cap: ' + m.chapters + '</span>' +
+        '<span>' + countLabel + ': ' + m.chapters + '</span>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -1741,7 +1790,7 @@ function openUploadChapterModal() {
   upchSelectedPages = [];
   document.getElementById('upch-manga-title').value = state.selectedManga.title;
   
-  // Auto-sugerir el siguiente capítulo
+  // Auto-sugerir el siguiente capítulo/episodio
   var nextChap = (state.selectedManga.chapters || 0) + 1;
   document.getElementById('upch-num').value = nextChap;
 
@@ -1754,30 +1803,98 @@ function openUploadChapterModal() {
   // Limpiar el input de archivo
   document.getElementById('upch-files').value = '';
 
+  const isAnime = state.selectedManga.type === 'anime';
+
+  // Adaptar textos y atributos si es Anime
+  const modalHeader = document.querySelector('#upload-chapter-modal .modal-header span');
+  if (modalHeader) {
+    modalHeader.textContent = isAnime ? '📤 Subir Nuevo Episodio' : '📤 Subir Nuevo Capítulo';
+  }
+
+  const mangaLabel = document.querySelector('#upload-chapter-modal label');
+  if (mangaLabel) {
+    mangaLabel.textContent = isAnime ? 'Anime:' : 'Manga / Manhwa:';
+  }
+
+  const numInput = document.getElementById('upch-num');
+  if (numInput && numInput.previousElementSibling) {
+    numInput.previousElementSibling.textContent = isAnime ? 'Episodio Nº:' : 'Capítulo Nº:';
+    numInput.placeholder = isAnime ? 'Ej: 12' : 'Ej: 15';
+  }
+
+  const nameInput = document.getElementById('upch-name');
+  if (nameInput && nameInput.previousElementSibling) {
+    nameInput.previousElementSibling.textContent = isAnime ? 'Título del Episodio (Opcional):' : 'Título del Capítulo (Opcional):';
+    nameInput.placeholder = isAnime ? 'Ej: "El despertar de la bestia"' : 'Ej: "El despertar del héroe"';
+  }
+
+  const fileInput = document.getElementById('upch-files');
+  if (fileInput) {
+    fileInput.accept = isAnime ? 'video/*' : 'image/*,.zip';
+    fileInput.multiple = !isAnime;
+  }
+
+  const dropzoneLabel = fileInput ? fileInput.parentNode.previousElementSibling : null;
+  if (dropzoneLabel) {
+    dropzoneLabel.textContent = isAnime ? 'Archivo de Video:' : 'Páginas del Capítulo:';
+  }
+
+  const dropzoneText = document.querySelector('#upch-dropzone .upch-dropzone-text');
+  if (dropzoneText) {
+    dropzoneText.innerHTML = isAnime ? '<strong>Arrastra el archivo de video (.mp4, .webm) aquí</strong>' : '<strong>Arrastra las imágenes o un archivo .ZIP aquí</strong>';
+  }
+
+  const dropzoneIcon = document.querySelector('#upch-dropzone .upch-dropzone-icon');
+  if (dropzoneIcon) {
+    dropzoneIcon.textContent = isAnime ? '📺' : '🖼️ / 📦';
+  }
+
+  const dropzoneHint = document.querySelector('#upch-dropzone .upch-dropzone-hint:nth-of-type(3)');
+  if (dropzoneHint) {
+    dropzoneHint.textContent = isAnime ? 'Acepta formatos MP4, WebM y Ogg' : 'Acepta JPG, PNG, WebP o archivos comprimidos ZIP';
+  }
+
+  const pagesTextarea = document.getElementById('upch-pages');
+  if (pagesTextarea) {
+    pagesTextarea.placeholder = isAnime ? 'https://ejemplo.com/episodio1.mp4\no enlace de YouTube' : 'https://i.imgur.com/pag1.jpg\nhttps://i.imgur.com/pag2.jpg';
+    var summaryText = pagesTextarea.parentNode.querySelector('summary');
+    if (summaryText) {
+      summaryText.textContent = isAnime ? '📎 O pega el enlace de video (alternativa)' : '📎 O pega URLs de imágenes (alternativa)';
+    }
+  }
+
+  const submitBtn = document.getElementById('upch-submit-btn');
+  if (submitBtn) {
+    submitBtn.textContent = isAnime ? '📤 Publicar Episodio' : '📤 Publicar Capítulo';
+  }
+
   openModal('upload-chapter-modal');
 
   // Configurar drag & drop en la zona
   var dropzone = document.getElementById('upch-dropzone');
-  var fileInput = document.getElementById('upch-files');
 
   // Cambio de archivos por clic
-  fileInput.onchange = function() {
-    processUpchFiles(this.files);
-  };
+  if (fileInput) {
+    fileInput.onchange = function() {
+      processUpchFiles(this.files);
+    };
+  }
 
   // Eventos drag & drop
-  dropzone.ondragover = function(ev) {
-    ev.preventDefault();
-    dropzone.classList.add('drag-over');
-  };
-  dropzone.ondragleave = function() {
-    dropzone.classList.remove('drag-over');
-  };
-  dropzone.ondrop = function(ev) {
-    ev.preventDefault();
-    dropzone.classList.remove('drag-over');
-    processUpchFiles(ev.dataTransfer.files);
-  };
+  if (dropzone) {
+    dropzone.ondragover = function(ev) {
+      ev.preventDefault();
+      dropzone.classList.add('drag-over');
+    };
+    dropzone.ondragleave = function() {
+      dropzone.classList.remove('drag-over');
+    };
+    dropzone.ondrop = function(ev) {
+      ev.preventDefault();
+      dropzone.classList.remove('drag-over');
+      processUpchFiles(ev.dataTransfer.files);
+    };
+  }
 }
 
 // Procesa los archivos de imagen seleccionados (o archivo ZIP) y genera miniaturas
@@ -1791,6 +1908,38 @@ async function processUpchFiles(files) {
   var previewGrid = document.getElementById('upch-preview-grid');
 
   let filesArray = Array.from(files);
+
+  const isAnime = state.selectedManga && state.selectedManga.type === 'anime';
+
+  if (isAnime) {
+    const videoFile = filesArray[0];
+    if (!videoFile.type.startsWith('video/')) {
+      showToast("Por favor selecciona un archivo de video válido (.mp4, .webm).");
+      return;
+    }
+    
+    upchSelectedPages = [videoFile];
+    
+    progressWrap.style.display = 'block';
+    progressBar.style.width = '100%';
+    progressBar.style.background = '#27ae60';
+    progressText.textContent = '✅ Video listo para publicar.';
+    countEl.textContent = '✅ Video seleccionado: ' + videoFile.name;
+    countEl.style.display = 'block';
+    previewGrid.innerHTML = '';
+    
+    var wrap = document.createElement('div');
+    wrap.className = 'upch-thumb-wrap video-preview';
+    wrap.style.width = '120px';
+    wrap.style.height = '80px';
+    
+    var objectUrl = URL.createObjectURL(videoFile);
+    wrap.innerHTML = '<video src="' + objectUrl + '" style="width:100%; height:100%; object-fit:cover; border-radius:3px;"></video>' +
+      '<span class="upch-thumb-num" style="font-size:9px;">Vista previa</span>' +
+      '<button class="upch-thumb-del" type="button" onclick="removeUpchPage(0)" title="Quitar">✕</button>';
+    previewGrid.appendChild(wrap);
+    return;
+  }
 
   // 1. Si es un único archivo ZIP, descomprimirlo
   if (filesArray.length === 1 && filesArray[0].name.toLowerCase().endsWith('.zip')) {
@@ -1883,14 +2032,18 @@ async function doUploadChapter(e) {
   var manga = state.catalog.find(function(m) { return m.id === state.selectedManga.id; });
   if (!manga) return;
 
+  const isAnime = manga.type === 'anime';
+
   async function saveChapter(pagesArray) {
     if (pagesArray.length === 0) {
-      showToast("Debes ingresar al menos una página (archivo o enlace).");
+      var itemLabel = isAnime ? 'video' : 'página';
+      showToast("Debes ingresar al menos un " + itemLabel + " (archivo o enlace).");
       return;
     }
 
     if (supabaseClient) {
-      showToast("Guardando capítulo en base de datos...");
+      var dbLabel = isAnime ? 'episodio' : 'capítulo';
+      showToast("Guardando " + dbLabel + " en la base de datos...");
       try {
         var updatedChaptersData = manga.chaptersData || {};
         updatedChaptersData[num] = pagesArray;
@@ -1909,13 +2062,13 @@ async function doUploadChapter(e) {
           .eq('id', manga.id);
 
         if (error) throw error;
-        showToast('¡Capítulo ' + num + ' publicado en tiempo real con éxito!');
+        showToast('¡' + (isAnime ? 'Episodio ' : 'Capítulo ') + num + ' publicado en tiempo real con éxito!');
         await syncWithSupabase();
         
         // Volver a cargar vista de detalle
         showDetail(manga.id);
       } catch (err) {
-        console.error("Error subiendo capítulo a Supabase:", err);
+        console.error("Error subiendo contenido a Supabase:", err);
         showToast("Error. Guardado en caché local.");
         saveChapterLocalFallback(pagesArray);
       }
@@ -1940,50 +2093,84 @@ async function doUploadChapter(e) {
     showDetail(manga.id);
     updateStats();
     renderSidebarStats();
+    showToast('¡' + (isAnime ? 'Episodio ' : 'Capítulo ') + num + ' publicado localmente con éxito!');
   }
 
   var pagesList = [];
-  
-  // Filtrar páginas válidas seleccionadas
   var cachedPages = upchSelectedPages.filter(function(p) { return p !== null && p !== undefined; });
   
-  if (cachedPages.length > 0) {
-    var progressWrap = document.getElementById('upch-progress-wrap');
-    var progressBar = document.getElementById('upch-progress-bar');
-    var progressText = document.getElementById('upch-progress-text');
+  if (isAnime) {
+    if (cachedPages.length > 0) {
+      // Archivo de video local
+      var videoFile = cachedPages[0];
+      var progressWrap = document.getElementById('upch-progress-wrap');
+      var progressBar = document.getElementById('upch-progress-bar');
+      var progressText = document.getElementById('upch-progress-text');
 
-    progressWrap.style.display = 'block';
-    progressBar.style.background = '#e67e22'; // Naranja durante la subida
-    
-    var uploadedUrls = [];
-    try {
-      for (var i = 0; i < cachedPages.length; i++) {
-        var file = cachedPages[i];
-        progressText.textContent = 'Subiendo página ' + (i + 1) + ' de ' + cachedPages.length + ' a ImgBB...';
-        var pct = Math.round((i / cachedPages.length) * 100);
-        progressBar.style.width = pct + '%';
+      progressWrap.style.display = 'block';
+      progressBar.style.width = '30%';
+      progressBar.style.background = '#e67e22';
+      progressText.textContent = 'Procesando y optimizando video...';
+      
+      setTimeout(async function() {
+        progressBar.style.width = '70%';
+        progressText.textContent = 'Simulando subida al CDN de video...';
         
-        var imgUrl = await uploadToImgBB(file);
-        uploadedUrls.push(imgUrl);
+        setTimeout(async function() {
+          progressBar.style.width = '100%';
+          progressBar.style.background = '#27ae60';
+          progressText.textContent = '✅ ¡Video subido con éxito!';
+          
+          var objectUrl = URL.createObjectURL(videoFile);
+          await saveChapter([objectUrl]);
+        }, 800);
+      }, 700);
+    } else {
+      // Enlace pegado
+      if (pagesText) {
+        pagesList = [pagesText.split('\n')[0].trim()];
       }
-      
-      progressBar.style.width = '100%';
-      progressBar.style.background = '#27ae60';
-      progressText.textContent = '✅ ¡Imágenes subidas a ImgBB con éxito!';
-      
-      await saveChapter(uploadedUrls);
-    } catch (err) {
-      console.error("Error al subir páginas a ImgBB:", err);
-      showToast("Fallo al subir a ImgBB. Revisa tu conexión.");
-      progressBar.style.background = '#c0392b';
-      progressText.textContent = '❌ Error de subida a ImgBB.';
+      await saveChapter(pagesList);
     }
   } else {
-    // Fallback: leer URLs pegadas en el textarea
-    if (pagesText) {
-      pagesList = pagesText.split('\n').map(function(line) { return line.trim(); }).filter(function(line) { return line !== ""; });
+    // Es manga: subir imágenes a ImgBB
+    if (cachedPages.length > 0) {
+      var progressWrap = document.getElementById('upch-progress-wrap');
+      var progressBar = document.getElementById('upch-progress-bar');
+      var progressText = document.getElementById('upch-progress-text');
+
+      progressWrap.style.display = 'block';
+      progressBar.style.background = '#e67e22';
+      
+      var uploadedUrls = [];
+      try {
+        for (var i = 0; i < cachedPages.length; i++) {
+          var file = cachedPages[i];
+          progressText.textContent = 'Subiendo página ' + (i + 1) + ' de ' + cachedPages.length + ' a ImgBB...';
+          var pct = Math.round((i / cachedPages.length) * 100);
+          progressBar.style.width = pct + '%';
+          
+          var imgUrl = await uploadToImgBB(file);
+          uploadedUrls.push(imgUrl);
+        }
+        
+        progressBar.style.width = '100%';
+        progressBar.style.background = '#27ae60';
+        progressText.textContent = '✅ ¡Imágenes subidas a ImgBB con éxito!';
+        
+        await saveChapter(uploadedUrls);
+      } catch (err) {
+        console.error("Error al subir páginas a ImgBB:", err);
+        showToast("Fallo al subir a ImgBB. Revisa tu conexión.");
+        progressBar.style.background = '#c0392b';
+        progressText.textContent = '❌ Error de subida a ImgBB.';
+      }
+    } else {
+      if (pagesText) {
+        pagesList = pagesText.split('\n').map(function(line) { return line.trim(); }).filter(function(line) { return line !== ""; });
+      }
+      await saveChapter(pagesList);
     }
-    await saveChapter(pagesList);
   }
 }
 
@@ -2255,6 +2442,248 @@ async function uploadToImgBB(fileOrBase64) {
   } else {
     throw new Error("Respuesta inválida de ImgBB");
   }
+}
+
+// ══════════════════════════════════════════════
+// ── REPRODUCTOR DE VIDEO DE ANIME (PREMIUM) ──
+// ══════════════════════════════════════════════
+
+function getYoutubeId(url) {
+  var regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  var match = url.match(regExp);
+  return (match && match[2].length === 11) ? match[2] : null;
+}
+
+function changeEpisode(num) {
+  if (state.selectedManga && num >= 1 && num <= state.selectedManga.chapters) {
+    openVideoPlayer(state.selectedManga.id, num);
+  }
+}
+
+function toggleTheaterMode() {
+  const container = document.getElementById('player-container');
+  if (container) {
+    container.classList.toggle('theater');
+    showToast(container.classList.contains('theater') ? "🎭 Modo Cine activado" : "Modo Cine desactivado");
+  }
+}
+
+async function openVideoPlayer(mangaId, episodeNum) {
+  var manga = state.catalog.find(m => m.id === mangaId);
+  if (!manga) return;
+
+  state.currentView = 'reader';
+  state.currentChapter = episodeNum;
+  addToHistory(manga, episodeNum);
+
+  if (!state.readChapters[manga.id]) state.readChapters[manga.id] = [];
+  if (state.readChapters[manga.id].indexOf(episodeNum) === -1) {
+    state.readChapters[manga.id].push(episodeNum);
+    saveState();
+    addXP(10);
+  }
+
+  document.getElementById('detail-view').style.display = 'none';
+  document.getElementById('sidebar').style.display = 'none';
+  var readerView = document.getElementById('reader-view');
+  readerView.style.display = 'block';
+
+  // Buscar vídeo del episodio
+  var videoUrl = "";
+  if (manga.chaptersData && manga.chaptersData[episodeNum]) {
+    videoUrl = manga.chaptersData[episodeNum][0] || "";
+  }
+
+  // Fallback si no hay video subido: usar un video de muestra
+  var isDemo = false;
+  if (!videoUrl) {
+    isDemo = true;
+    const demoVideos = [
+      "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+      "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+      "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+      "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutback.mp4"
+    ];
+    videoUrl = demoVideos[(episodeNum - 1) % demoVideos.length];
+  }
+
+  var dropdownOptions = '';
+  for (var i = 1; i <= manga.chapters; i++) {
+    var isSelected = i === episodeNum ? ' selected' : '';
+    dropdownOptions += '<option value="' + i + '"' + isSelected + '>Episodio ' + i + '</option>';
+  }
+
+  var prevDisabled = episodeNum <= 1 ? ' disabled style="opacity:0.5; cursor:not-allowed;"' : '';
+  var nextDisabled = episodeNum >= manga.chapters ? ' disabled style="opacity:0.5; cursor:not-allowed;"' : '';
+
+  var isYoutube = videoUrl.includes("youtube.com") || videoUrl.includes("youtu.be") || videoUrl.includes("youtube-nocookie.com");
+  var videoEmbedHTML = "";
+
+  if (isYoutube) {
+    var ytId = getYoutubeId(videoUrl);
+    videoEmbedHTML = '<iframe class="anime-iframe" src="https://www.youtube.com/embed/' + ytId + '?autoplay=1&rel=0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>';
+  } else {
+    videoEmbedHTML = 
+      '<video id="anime-custom-player" class="anime-custom-player" src="' + videoUrl + '" autoplay controls>' +
+        'Tu navegador no soporta reproducción de video.' +
+      '</video>';
+  }
+
+  var commentFormHTML = '';
+  if (state.currentUser) {
+    commentFormHTML = `
+      <div class="comment-input-area">
+        <textarea id="reader-comment-text" placeholder="¿Qué te pareció este episodio?"></textarea>
+        <button class="btn-comentar" onclick="addReaderComment(${manga.id}, ${episodeNum})">Enviar</button>
+      </div>
+    `;
+  } else {
+    commentFormHTML = `
+      <div class="lector-comment-lock">
+        <span>Debes <strong>iniciar sesión</strong> para dejar comentarios en los episodios.</span>
+        <button class="btn-classic-red" onclick="openModal('login-modal')">Iniciar Sesión / Registrarse</button>
+      </div>
+    `;
+  }
+
+  readerView.innerHTML = `
+    <div class="anime-player-wrapper">
+      <div class="player-header-bar">
+        <div class="player-header-left">
+          <span class="player-show-title">${manga.title}</span>
+          <span class="player-episode-tag">Episodio ${episodeNum}</span>
+          ${isDemo ? '<span class="demo-tag" title="Este es un video de demostración gratuito para pruebas">DEMO</span>' : ''}
+        </div>
+        <div class="player-header-right">
+          <button class="btn-classic-grey btn-theater-mode" onclick="toggleTheaterMode()"><span class="icon">🎬</span> Modo Cine</button>
+          <button class="btn-reportar-error" onclick="openModal('report-modal')">⚠ Reportar</button>
+          <button class="btn-cerrar-lector" onclick="closeReader()">✕ Cerrar</button>
+        </div>
+      </div>
+
+      <div class="player-view-container" id="player-container">
+        <div class="video-container-aspect">
+          ${videoEmbedHTML}
+        </div>
+      </div>
+
+      <div class="player-navigation-controls">
+        <div class="nav-control-left">
+          <button class="btn-classic-grey" onclick="changeEpisode(${episodeNum - 1})" ${prevDisabled}>← Anterior</button>
+        </div>
+        <div class="nav-control-center">
+          <select id="player-episode-select" class="player-select" onchange="changeEpisode(parseInt(this.value))">
+            ${dropdownOptions}
+          </select>
+        </div>
+        <div class="nav-control-right">
+          <button class="btn-classic-red" onclick="changeEpisode(${episodeNum + 1})" ${nextDisabled}>Siguiente →</button>
+        </div>
+      </div>
+
+      <div class="lector-comments">
+        <div class="lector-comments-title">Comentarios del Episodio ${episodeNum}</div>
+        <div class="lector-comment-form">
+          ${commentFormHTML}
+        </div>
+        <div class="lector-comments-list" id="reader-comments-list"></div>
+      </div>
+    </div>
+  `;
+
+  renderReaderCommentsList(manga.id, episodeNum);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function getDefaultSeedCatalog() {
+  return [
+    {
+      id: 1,
+      title: "Solo Leveling",
+      type: "manhwa",
+      author: "Chugong",
+      cover: "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=400&q=80",
+      rating: 4.9,
+      chapters: 3,
+      chapters_data: {
+        1: ["placeholder", "placeholder"],
+        2: ["placeholder", "placeholder"],
+        3: ["placeholder", "placeholder"]
+      },
+      status: "Completado",
+      views: 12500,
+      genres: ["Acción", "Aventura", "Fantasía"],
+      description: "En un mundo donde cazadores deben luchar contra monstruos para proteger a la humanidad, Sung Jin-Woo, el cazador más débil de todos, encuentra un sistema secreto que le permite subir de nivel ilimitadamente.",
+      year: 2018,
+      uploader: "System",
+      lang: "ES",
+      nsfw: false
+    },
+    {
+      id: 2,
+      title: "One Piece",
+      type: "manga",
+      author: "Eiichiro Oda",
+      cover: "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=400&q=80",
+      rating: 4.8,
+      chapters: 2,
+      chapters_data: {
+        1: ["placeholder"],
+        2: ["placeholder"]
+      },
+      status: "En emisión",
+      views: 9800,
+      genres: ["Aventura", "Comedia", "Fantasía"],
+      description: "Monkey D. Luffy se niega a permitir que nadie se interponga en su camino para convertirse en el rey de los piratas. Con un barco y una tripulación, Luffy busca el legendario tesoro One Piece.",
+      year: 1997,
+      uploader: "System",
+      lang: "ES",
+      nsfw: false
+    },
+    {
+      id: 3,
+      title: "Demon Slayer (Anime)",
+      type: "anime",
+      author: "ufotable",
+      cover: "https://images.unsplash.com/photo-1541701494587-cb58502866ab?w=400&q=80",
+      rating: 4.9,
+      chapters: 3,
+      chapters_data: {
+        1: ["https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"],
+        2: ["https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"],
+        3: ["https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"]
+      },
+      status: "Completado",
+      views: 24500,
+      genres: ["Acción", "Aventura", "Fantasía", "Sobrenatural"],
+      description: "Tanjiro Kamado lucha por salvar a su hermana Nezuko, convertida en demonio, y vengar a su familia asesinada por el rey de los demonios, Muzan Kibutsuji.",
+      year: 2019,
+      uploader: "ufotable",
+      lang: "ES",
+      nsfw: false
+    },
+    {
+      id: 4,
+      title: "Shinmai Maou no Testament (Zona +18)",
+      type: "anime",
+      author: "Production IMS",
+      cover: "https://images.unsplash.com/photo-1560942485-b2a11cc13456?w=400&q=80",
+      rating: 4.2,
+      chapters: 2,
+      chapters_data: {
+        1: ["https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4"],
+        2: ["https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4"]
+      },
+      status: "Completado",
+      views: 18700,
+      genres: ["Acción", "Fantasía", "Romance", "Sobrenatural", "Gore"],
+      description: "Basara Toujo se ve obligado a convivir con dos hermanastras que resultan ser la nueva Reina Demonio y una súcubo protectora. Un anime lleno de acción, batallas sobrenaturales y romance subido de tono.",
+      year: 2015,
+      uploader: "System",
+      lang: "ES",
+      nsfw: true
+    }
+  ];
 }
 
 
