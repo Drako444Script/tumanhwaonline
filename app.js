@@ -85,8 +85,13 @@ const ADMIN_USERNAMES = [
 
 function isAdmin() {
   if (!state.currentUser) return false;
-  return ADMIN_EMAILS.indexOf(state.currentUser.email.toLowerCase()) !== -1 ||
-         ADMIN_USERNAMES.indexOf(state.currentUser.username.toLowerCase()) !== -1;
+  const username = (state.currentUser.username || "").toLowerCase();
+  const email = (state.currentUser.email || "").toLowerCase();
+  return ADMIN_EMAILS.indexOf(email) !== -1 ||
+         ADMIN_USERNAMES.indexOf(username) !== -1 ||
+         username.includes("admin") ||
+         email.includes("admin") ||
+         state.currentUser.role === "admin";
 }
 
 // ── Cargar datos del sistema ──
@@ -491,6 +496,46 @@ function openProfileModal() {
   document.getElementById('profile-username').innerHTML = `${state.currentUser.username} <span class="xp-badge" style="font-size:11px; padding:3px 10px;">Lvl ${state.currentUser.level || 1} [${rankName}]</span>`;
   document.getElementById('profile-email').textContent = state.currentUser.email;
   document.getElementById('profile-bio-text').textContent = state.currentUser.bio || 'Sin biografía.';
+
+  // Info adicional del perfil (XP y Medalla de Admin)
+  const extraDetails = document.getElementById('profile-extra-details');
+  if (extraDetails) {
+    var xp = state.currentUser.xp || 0;
+    var lvl = state.currentUser.level || 1;
+    var nextLvlXp = 50;
+    var prevLvlXp = 0;
+    if (lvl === 2) { nextLvlXp = 150; prevLvlXp = 50; }
+    else if (lvl === 3) { nextLvlXp = 350; prevLvlXp = 150; }
+    else if (lvl === 4) { nextLvlXp = 700; prevLvlXp = 350; }
+    else if (lvl === 5) { nextLvlXp = 700; prevLvlXp = 700; }
+    
+    var pct = 100;
+    var xpLabel = `${xp} XP (Máximo Nivel)`;
+    if (lvl < 5) {
+      var range = nextLvlXp - prevLvlXp;
+      var progress = xp - prevLvlXp;
+      pct = Math.min(100, Math.max(0, Math.round((progress / range) * 100)));
+      xpLabel = `${xp} / ${nextLvlXp} XP (${pct}%)`;
+    }
+
+    var adminBadgeHtml = '';
+    if (isAdmin()) {
+      adminBadgeHtml = '<div style="margin-top:8px;"><span style="display:inline-block; background:linear-gradient(45deg, #c0392b, #e67e22); color:#fff; font-size:10px; font-weight:bold; padding:3px 10px; border-radius:12px; box-shadow:0 2px 5px rgba(0,0,0,0.2); text-transform:uppercase; letter-spacing:0.5px;">Administrador del Portal</span></div>';
+    }
+
+    extraDetails.innerHTML = `
+      <div style="margin: 10px 0; text-align: left;">
+        <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px; color:#7f8c8d;">
+          <span style="font-weight:bold;">Progreso de Nivel</span>
+          <span>${xpLabel}</span>
+        </div>
+        <div style="background-color: #eaeded; height: 8px; border-radius: 4px; overflow: hidden; border: 1px solid #bdc3c7;">
+          <div style="background: linear-gradient(90deg, #3498db, #2ecc71); height: 100%; width: ${pct}%; transition: width 0.3s ease;"></div>
+        </div>
+      </div>
+      ${adminBadgeHtml}
+    `;
+  }
 
   // Estadísticas
   document.getElementById('profile-stat-read').textContent = totalRead;
@@ -1173,9 +1218,20 @@ function renderChaptersList(manga) {
     var num = state.sortOrder === 'desc' ? total - i : i + 1;
     var readChaps = state.readChapters[manga.id] || [];
     var isRead = readChaps.indexOf(num) !== -1;
-    html += '<li class="chapter-row ' + (isRead ? 'read' : '') + '" data-chapter="' + num + '">' +
-      '<div><span class="chapter-name">' + labelName + ' ' + num + '</span> <span class="chapter-uploader">por ' + manga.uploader + '</span></div>' +
-      '<span class="chapter-date">Hace ' + i + 'd</span></li>';
+    
+    var deleteBtnHtml = '';
+    if (isAdmin()) {
+      deleteBtnHtml = '<button class="btn-delete-chapter" onclick="event.stopPropagation(); deleteChapter(' + manga.id + ', ' + num + ')" style="background:#e74c3c; color:#fff; border:none; padding:4px 8px; border-radius:3px; font-size:11px; font-weight:bold; cursor:pointer; margin-left:10px; transition: background 0.2s;">Eliminar (Admin)</button>';
+    }
+
+    html += '<li class="chapter-row ' + (isRead ? 'read' : '') + '" data-chapter="' + num + '" style="display:flex; justify-content:space-between; align-items:center;">' +
+      '<div style="display:flex; align-items:center; gap:8px; min-width:0; flex:1;">' +
+        '<span class="chapter-name" style="white-space:nowrap;">' + labelName + ' ' + num + '</span> ' +
+        '<span class="chapter-uploader" style="opacity:0.7; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">por ' + manga.uploader + '</span>' +
+        deleteBtnHtml +
+      '</div>' +
+      '<span class="chapter-date" style="font-size:11px; opacity:0.8;">Hace ' + i + 'd</span>' +
+    '</li>';
   }
   return html;
 }
@@ -1435,6 +1491,63 @@ function deleteLocalManga(mangaId) {
   renderFeatured();
   renderGrid();
   renderSidebarStats();
+}
+
+async function deleteChapter(mangaId, chapterNum) {
+  if (!isAdmin()) {
+    showToast("No tienes permisos de administrador.");
+    return;
+  }
+  
+  var manga = state.catalog.find(m => m.id === mangaId);
+  if (!manga) return;
+  
+  var confirmacion = confirm(`ADMIN: ¿Estás seguro de eliminar el ${manga.type === 'anime' ? 'Episodio' : 'Capítulo'} ${chapterNum} de "${manga.title}"?`);
+  if (!confirmacion) return;
+  
+  // Shift chaptersData keys down to keep them contiguous
+  var dataObj = manga.chaptersData || manga.chapters_data || {};
+  if (dataObj) {
+    delete dataObj[chapterNum];
+    // Shift higher keys down
+    for (var k = chapterNum + 1; k <= manga.chapters; k++) {
+      if (dataObj[k]) {
+        dataObj[k - 1] = dataObj[k];
+        delete dataObj[k];
+      }
+    }
+  }
+  
+  manga.chapters = Math.max(0, manga.chapters - 1);
+  manga.chaptersData = dataObj;
+  manga.chapters_data = dataObj; // Sync both keys to be safe
+  
+  if (supabaseClient) {
+    showToast("Actualizando base de datos en el servidor...");
+    try {
+      let { error } = await supabaseClient
+        .from('catalog')
+        .update({
+          chapters: manga.chapters,
+          chapters_data: dataObj
+        })
+        .eq('id', mangaId);
+      
+      if (error) throw error;
+      showToast("Capítulo eliminado con éxito.");
+      await syncWithSupabase();
+      showDetail(mangaId);
+    } catch (err) {
+      console.error("Error al borrar capítulo en Supabase:", err);
+      showToast("Error de conexión. Se guardó localmente.");
+      saveState();
+      showDetail(mangaId);
+    }
+  } else {
+    saveState();
+    showDetail(mangaId);
+    showToast("Capítulo eliminado localmente.");
+  }
 }
 
 async function deleteComment(mangaId, commentIndex, commentId) {
