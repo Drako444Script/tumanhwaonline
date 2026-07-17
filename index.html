@@ -61,7 +61,17 @@
       
       <!-- Vista de Catálogo -->
       <div id="catalog-view">
-        <div class="section-title">Últimas Publicaciones de la Comunidad</div>
+        <div class="section-title" id="catalog-section-title">Últimas Publicaciones de la Comunidad</div>
+        
+        <!-- Barra de sub-filtros exclusiva para Zona +18 -->
+        <div class="nsfw-filters-bar" id="nsfw-filters-bar" style="display: none; margin-bottom: 15px;">
+          <button class="nsfw-tab active" onclick="setNSFWFilterType('all', this)">🔞 Todo +18</button>
+          <button class="nsfw-tab" onclick="setNSFWFilterType('anime', this)">📺 Animes</button>
+          <button class="nsfw-tab" onclick="setNSFWFilterType('manga', this)">📖 Mangas</button>
+          <button class="nsfw-tab" onclick="setNSFWFilterType('manhwa', this)">🇰🇷 Manhwas</button>
+          <button class="nsfw-tab" onclick="setNSFWFilterType('novel', this)">📝 Novelas</button>
+        </div>
+
         <div class="catalog-filters-bar">
           <div class="filter-group">
             <label>Ordenar por:</label>
@@ -257,10 +267,24 @@
             <input type="text" id="up-title" required placeholder="Ej: Solo Leveling">
           </div>
           <div class="form-group">
-            <label>Subir Imagen de Portada desde tu PC/Celular:</label>
-            <input type="file" id="up-cover-file" accept="image/*" style="margin-bottom: 5px;">
-            <span style="font-size: 11px; color: #7f8c8d; display: block; margin-bottom: 2px;">O pega un enlace de internet (URL):</span>
-            <input type="url" id="up-cover" placeholder="Ej: https://i.imgur.com/TuImagen.jpg">
+            <label>Imagen de Portada:</label>
+            <div id="up-cover-dropzone" class="upch-dropzone" style="height: 100px; margin-bottom: 8px;">
+              <div class="upch-dropzone-icon" style="font-size: 20px; margin-bottom: 2px;">🖼️</div>
+              <div class="upch-dropzone-text" style="font-size: 11px;"><strong>Arrastra la portada aquí</strong></div>
+              <div class="upch-dropzone-hint" style="font-size: 9px;">o haz clic para seleccionar</div>
+              <input type="file" id="up-cover-file" accept="image/*" style="position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%;">
+            </div>
+            
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px;">
+              <div style="flex: 1;">
+                <span style="font-size: 11px; color: #7f8c8d; display: block; margin-bottom: 2px;">O pega un enlace de internet (URL):</span>
+                <input type="url" id="up-cover" placeholder="Ej: https://i.imgur.com/TuImagen.jpg" style="padding: 6px;">
+              </div>
+              <div id="up-cover-preview-container" class="up-cover-preview-container" style="width: 55px; height: 75px; border: 1px dashed #ccc; border-radius:3px; display:flex; justify-content:center; align-items:center; overflow:hidden; background:#eaeded;">
+                <img id="up-cover-preview" src="" alt="Vista Previa" style="display: none; width:100%; height:100%; object-fit:cover;">
+                <div id="up-cover-preview-placeholder" class="up-cover-preview-placeholder" style="font-size: 9px; color:#7f8c8d; text-align:center; padding:2px;">Sin Portada</div>
+              </div>
+            </div>
           </div>
           <div class="form-group">
             <label>Tipo:</label>

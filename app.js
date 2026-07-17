@@ -52,6 +52,7 @@ const state = {
   filterGenre: 'all',
   searchQuery: '',
   showNSFW: false,
+  nsfwFilterType: 'all', // 'all', 'anime', 'manga', 'manhwa', 'novel'
   selectedManga: null,
   currentChapter: 1,
   readingMode: 'cascade',
@@ -311,6 +312,68 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
           authorInput.previousElementSibling.textContent = 'Autor:';
           authorInput.placeholder = 'Ej: Chugong';
+        }
+      }
+    });
+  }
+
+  // Configurar Drag & Drop y previsualización de portada en el modal de subida
+  const coverDropzone = document.getElementById('up-cover-dropzone');
+  const coverFileInput = document.getElementById('up-cover-file');
+  const coverUrlInput = document.getElementById('up-cover');
+  const coverPreview = document.getElementById('up-cover-preview');
+  const coverPreviewPlaceholder = document.getElementById('up-cover-preview-placeholder');
+
+  function updateCoverPreview(src) {
+    if (coverPreview && coverPreviewPlaceholder) {
+      if (src && src.trim() !== "") {
+        coverPreview.src = src;
+        coverPreview.style.display = 'block';
+        coverPreviewPlaceholder.style.display = 'none';
+      } else {
+        coverPreview.src = '';
+        coverPreview.style.display = 'none';
+        coverPreviewPlaceholder.style.display = 'block';
+      }
+    }
+  }
+
+  if (coverFileInput) {
+    coverFileInput.addEventListener('change', function() {
+      if (this.files && this.files[0]) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+          updateCoverPreview(e.target.result);
+        };
+        reader.readAsDataURL(this.files[0]);
+      } else {
+        updateCoverPreview(coverUrlInput ? coverUrlInput.value.trim() : '');
+      }
+    });
+  }
+
+  if (coverUrlInput) {
+    coverUrlInput.addEventListener('input', function() {
+      updateCoverPreview(this.value.trim());
+    });
+  }
+
+  if (coverDropzone) {
+    coverDropzone.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      this.classList.add('drag-over');
+    });
+    coverDropzone.addEventListener('dragleave', function() {
+      this.classList.remove('drag-over');
+    });
+    coverDropzone.addEventListener('drop', function(e) {
+      e.preventDefault();
+      this.classList.remove('drag-over');
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        if (coverFileInput) {
+          coverFileInput.files = e.dataTransfer.files;
+          var event = new Event('change');
+          coverFileInput.dispatchEvent(event);
         }
       }
     });
@@ -729,23 +792,44 @@ function triggerSearch() {
 }
 
 function toggleNSFWFilter(element) {
+  var bar = document.getElementById('nsfw-filters-bar');
   if (!state.showNSFW) {
     var confirmar = confirm("ADVERTENCIA: Esta sección contiene material exclusivo para adultos (+18) que puede incluir violencia o escenas explícitas.\n\n¿Confirmas que eres mayor de 18 años y deseas ingresar a la Zona +18?");
     if (!confirmar) {
       state.showNSFW = false;
       element.classList.remove('active');
+      if (bar) bar.style.display = 'none';
+      document.body.classList.remove('zona-nsfw-active');
       return;
     }
     state.showNSFW = true;
     element.classList.add('active');
+    if (bar) bar.style.display = 'flex';
+    document.body.classList.add('zona-nsfw-active');
+    state.nsfwFilterType = 'all';
+    
+    // Resetear pestaña activa de la barra NSFW
+    document.querySelectorAll('.nsfw-tab').forEach(t => t.classList.remove('active'));
+    var allTab = document.querySelector('.nsfw-tab');
+    if (allTab) allTab.classList.add('active');
+    
     showToast("🔞 Has entrado a la Zona +18");
   } else {
     state.showNSFW = false;
     element.classList.remove('active');
+    if (bar) bar.style.display = 'none';
+    document.body.classList.remove('zona-nsfw-active');
     showToast("Saliste de la Zona +18");
   }
   renderFeatured();
   renderGenres();
+  renderGrid();
+}
+
+function setNSFWFilterType(type, element) {
+  state.nsfwFilterType = type;
+  document.querySelectorAll('.nsfw-tab').forEach(t => t.classList.remove('active'));
+  if (element) element.classList.add('active');
   renderGrid();
 }
 
@@ -781,8 +865,20 @@ function renderGrid() {
 
   let filtered = state.catalog.slice();
 
-  if (!state.showNSFW) filtered = filtered.filter(m => !m.nsfw);
-  if (state.filterType !== 'all') filtered = filtered.filter(m => m.type === state.filterType);
+  if (state.showNSFW) {
+    // Modo +18 activo: mostrar solo contenido +18
+    filtered = filtered.filter(m => m.nsfw === true);
+    if (state.nsfwFilterType !== 'all') {
+      filtered = filtered.filter(m => m.type === state.nsfwFilterType);
+    }
+  } else {
+    // Modo convencional activo: ocultar todo el contenido +18
+    filtered = filtered.filter(m => !m.nsfw);
+    if (state.filterType !== 'all') {
+      filtered = filtered.filter(m => m.type === state.filterType);
+    }
+  }
+
   if (state.filterGenre !== 'all') filtered = filtered.filter(m => m.genres && m.genres.includes(state.filterGenre));
   if (state.statusFilter !== 'all') filtered = filtered.filter(m => m.status === state.statusFilter);
   if (state.searchQuery) {
@@ -1672,6 +1768,27 @@ function openUploadModal() {
     cb.checked = false;
     toggleGenreCheckbox(cb);
   });
+
+  // Resetear previsualización de portada
+  var coverPreview = document.getElementById('up-cover-preview');
+  var coverPreviewPlaceholder = document.getElementById('up-cover-preview-placeholder');
+  if (coverPreview && coverPreviewPlaceholder) {
+    coverPreview.src = '';
+    coverPreview.style.display = 'none';
+    coverPreviewPlaceholder.style.display = 'block';
+  }
+
+  // Limpiar inputs del formulario
+  var form = document.querySelector('#upload-modal form');
+  if (form) form.reset();
+
+  // Asegurar que el select resetee la etiqueta de Estudio/Autor
+  var authorInput = document.getElementById('up-author');
+  if (authorInput && authorInput.previousElementSibling) {
+    authorInput.previousElementSibling.textContent = 'Autor:';
+    authorInput.placeholder = 'Ej: Chugong';
+  }
+
   openModal('upload-modal');
 }
 
@@ -1693,7 +1810,14 @@ async function doUpload(e) {
     genres.push(cb.value);
   });
   if (genres.length === 0) {
-    genres = ["General"];
+    showToast("⚠️ Debes seleccionar al menos un género.");
+    var selector = document.getElementById('up-genres-selector');
+    if (selector) {
+      selector.style.outline = '2px solid #e74c3c';
+      selector.style.borderRadius = '4px';
+      setTimeout(function() { selector.style.outline = 'none'; }, 3000);
+    }
+    return;
   }
 
   async function saveManga(finalCover) {
