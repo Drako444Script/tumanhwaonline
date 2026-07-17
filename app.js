@@ -47,9 +47,10 @@ const state = {
   library: {},
   history: [],
   comments: {},
+  bookmarks: {},          // Marcadores: { mangaId: { chapter: X, page: Y, time: Z } }
   currentView: 'catalog',
   filterType: 'all',
-  filterGenre: 'all',
+  filterGenres: [],       // Selección múltiple de géneros
   searchQuery: '',
   showNSFW: false,
   nsfwFilterType: 'all', // 'all', 'anime', 'manga', 'manhwa', 'novel'
@@ -61,7 +62,8 @@ const state = {
   sortOrder: 'desc',
   libraryTab: 'all',
   sortBy: 'recent',
-  statusFilter: 'all'
+  statusFilter: 'all',
+  darkTheme: false
 };
 
 const ALL_GENRES = [
@@ -116,6 +118,20 @@ async function loadState() {
     } catch (e) {
       console.warn("Error cargando historial local:", e);
       state.history = [];
+    }
+
+    try {
+      state.bookmarks = JSON.parse(localStorage.getItem('tm-bookmarks')) || {};
+    } catch (e) {
+      console.warn("Error cargando marcadores locales:", e);
+      state.bookmarks = {};
+    }
+    
+    try {
+      state.darkTheme = JSON.parse(localStorage.getItem('tm-darktheme')) || false;
+    } catch (e) {
+      console.warn("Error cargando tema local:", e);
+      state.darkTheme = false;
     }
 
     // Si Supabase está configurado, cargamos en tiempo real con recuperación local en caso de error
@@ -231,6 +247,8 @@ function saveState() {
     localStorage.setItem('tm-history', JSON.stringify(state.history));
     localStorage.setItem('tm-comments', JSON.stringify(state.comments));
     localStorage.setItem('tm-catalog', JSON.stringify(state.catalog));
+    localStorage.setItem('tm-bookmarks', JSON.stringify(state.bookmarks));
+    localStorage.setItem('tm-darktheme', JSON.stringify(state.darkTheme));
   } catch (e) {
     console.warn("Error guardando en localStorage:", e);
   }
@@ -375,6 +393,24 @@ document.addEventListener('DOMContentLoaded', () => {
           var event = new Event('change');
           coverFileInput.dispatchEvent(event);
         }
+      }
+    });
+  }
+
+  // Inicializar tema al cargar la página
+  initTheme();
+
+  // Autocompletado del buscador
+  if (searchInput) {
+    searchInput.addEventListener('input', function() {
+      showAutocompleteSuggestions(this.value.trim());
+    });
+    
+    // Ocultar autocompletado si se hace clic fuera del buscador
+    document.addEventListener('click', function(e) {
+      const autoBox = document.getElementById('search-autocomplete');
+      if (autoBox && !searchInput.contains(e.target) && !autoBox.contains(e.target)) {
+        autoBox.style.display = 'none';
       }
     });
   }
@@ -734,10 +770,11 @@ function renderGenres() {
 
   const sortedGenres = Object.keys(counts).sort();
   const totalVisible = state.catalog.filter(m => !m.nsfw || state.showNSFW).length;
-  let html = '<li class="genre-item ' + (state.filterGenre === 'all' ? 'active' : '') + '" onclick="setFilterGenre(\'all\')">Todos <span class="genre-count">(' + totalVisible + ')</span></li>';
+  let html = '<li class="genre-item ' + (state.filterGenres.length === 0 ? 'active' : '') + '" onclick="toggleFilterGenre(\'all\')">Todos <span class="genre-count">(' + totalVisible + ')</span></li>';
 
   sortedGenres.forEach(genre => {
-    html += '<li class="genre-item ' + (state.filterGenre === genre ? 'active' : '') + '" onclick="setFilterGenre(\'' + genre + '\')">' +
+    const isActive = state.filterGenres.indexOf(genre) !== -1 ? 'active' : '';
+    html += '<li class="genre-item ' + isActive + '" onclick="toggleFilterGenre(\'' + genre + '\')">' +
       genre + ' <span class="genre-count">(' + counts[genre] + ')</span></li>';
   });
 
@@ -779,9 +816,18 @@ function setFilterType(type, element) {
   goHome();
 }
 
-// Cambiar filtro por género
-function setFilterGenre(genre) {
-  state.filterGenre = genre;
+// Cambiar filtro por género (múltiple)
+function toggleFilterGenre(genre) {
+  if (genre === 'all') {
+    state.filterGenres = [];
+  } else {
+    var idx = state.filterGenres.indexOf(genre);
+    if (idx === -1) {
+      state.filterGenres.push(genre);
+    } else {
+      state.filterGenres.splice(idx, 1);
+    }
+  }
   renderGenres();
   renderGrid();
 }
@@ -858,6 +904,8 @@ function renderGrid() {
   const grid = document.getElementById('manga-grid');
   if (!grid) return;
 
+  renderBookmarks();
+
   const sortSelect = document.getElementById('filter-sort');
   const statusSelect = document.getElementById('filter-status');
   if (sortSelect) state.sortBy = sortSelect.value;
@@ -879,7 +927,9 @@ function renderGrid() {
     }
   }
 
-  if (state.filterGenre !== 'all') filtered = filtered.filter(m => m.genres && m.genres.includes(state.filterGenre));
+  if (state.filterGenres.length > 0) {
+    filtered = filtered.filter(m => m.genres && state.filterGenres.every(g => m.genres.includes(g)));
+  }
   if (state.statusFilter !== 'all') filtered = filtered.filter(m => m.status === state.statusFilter);
   if (state.searchQuery) {
     filtered = filtered.filter(m =>
@@ -972,7 +1022,15 @@ async function showDetail(id) {
 
   const isAnime = manga.type === 'anime';
   const labelAutor = isAnime ? 'Estudio / Director:' : 'Autor:';
-  const labelAction = isAnime ? 'Ver Primer Episodio' : 'Leer Primer Capítulo';
+  
+  var labelAction = isAnime ? 'Ver Primer Episodio' : 'Leer Primer Capítulo';
+  var actionClick = 'startReading()';
+  if (state.bookmarks[manga.id]) {
+    const book = state.bookmarks[manga.id];
+    labelAction = isAnime ? 'Continuar Viendo Ep. ' + book.chapter : 'Continuar Leyendo Cap. ' + book.chapter;
+    actionClick = isAnime ? 'openVideoPlayer(' + manga.id + ', ' + book.chapter + ')' : 'openReader(' + book.chapter + ')';
+  }
+
   const labelListTitle = isAnime ? 'Lista de Episodios' : 'Lista de Capítulos';
   const labelAddButton = isAnime ? '+ Agregar Episodio' : '+ Agregar Capítulo';
 
@@ -996,7 +1054,7 @@ async function showDetail(id) {
             '<tr><td>Puntuar obra:</td><td><div class="star-rating-wrap">' + starsHtml + '</div></td></tr>' +
           '</table>' +
           '<div class="detail-actions">' +
-            '<button class="btn-classic-red" onclick="startReading()">' + labelAction + '</button>' +
+            '<button class="btn-classic-red" onclick="' + actionClick + '">' + labelAction + '</button>' +
             '<button class="btn-classic-grey" onclick="openLibraryModal(' + manga.id + ')">' + (libSection ? '★ Cambiar Estado' : '☆ Agregar a Biblioteca') + '</button>' +
             '<button class="btn-classic-grey" onclick="startDownloadSimulation()">↓ Descargar</button>' +
             (isAdmin() ? '<button class="btn-classic-grey btn-admin-delete" style="background-color:#e74c3c; color:#fff; border-color:#c0392b;" onclick="deleteManga(' + manga.id + ')">Eliminar Obra (Admin)</button>' : '') +
@@ -1431,6 +1489,8 @@ function openReader(chapterNum) {
     addXP(10);
   }
 
+  saveBookmark(manga.id, chapterNum, 1);
+
   document.getElementById('detail-view').style.display = 'none';
   document.getElementById('sidebar').style.display = 'none';
   var readerView = document.getElementById('reader-view');
@@ -1658,6 +1718,14 @@ function changeReadingMode(mode) {
   state.readingMode = mode;
   var cascadeContainer = document.getElementById('reader-pages-cascade');
   var singleContainer = document.getElementById('reader-pages-single');
+  var autoscrollControls = document.getElementById('autoscroll-controls');
+
+  if (autoscrollControls) {
+    autoscrollControls.style.display = mode === 'cascade' ? 'inline-flex' : 'none';
+  }
+  if (mode !== 'cascade') {
+    stopAutoScroll();
+  }
 
   if (mode === 'cascade') {
     cascadeContainer.style.display = 'flex';
@@ -1750,6 +1818,7 @@ function changeChapter(num) {
 }
 
 function closeReader() {
+  stopAutoScroll();
   window.removeEventListener('scroll', handleReaderScroll);
   document.getElementById('reader-view').style.display = 'none';
   document.getElementById('detail-view').style.display = 'block';
@@ -2310,6 +2379,7 @@ async function doUploadChapter(e) {
 // ── NAVEGACIÓN ──
 // ══════════════════════════════════════════════
 function goHome() {
+  stopAutoScroll();
   state.selectedManga = null;
   state.currentView = 'catalog';
   document.getElementById('detail-view').style.display = 'none';
@@ -2596,7 +2666,7 @@ function toggleTheaterMode() {
   const container = document.getElementById('player-container');
   if (container) {
     container.classList.toggle('theater');
-    showToast(container.classList.contains('theater') ? "🎭 Modo Cine activado" : "Modo Cine desactivado");
+    showToast(container.classList.contains('theater') ? "Modo Cine activado" : "Modo Cine desactivado");
   }
 }
 
@@ -2614,6 +2684,8 @@ async function openVideoPlayer(mangaId, episodeNum) {
     saveState();
     addXP(10);
   }
+
+  saveBookmark(manga.id, episodeNum, 1);
 
   document.getElementById('detail-view').style.display = 'none';
   document.getElementById('sidebar').style.display = 'none';
@@ -2816,6 +2888,219 @@ function getDefaultSeedCatalog() {
       nsfw: true
     }
   ];
+}
+
+// ══════════════════════════════════════════════
+// ── FUNCIONES DE NUEVAS CARACTERÍSTICAS PREMIUM ──
+// ══════════════════════════════════════════════
+
+// 1. TEMA DE MODO OSCURO GLOBAL
+function initTheme() {
+  const btn = document.getElementById('theme-toggle-btn');
+  const text = document.getElementById('theme-toggle-text');
+  const sunIcon = document.querySelector('.theme-icon-sun');
+  const moonIcon = document.querySelector('.theme-icon-moon');
+  
+  if (state.darkTheme) {
+    document.body.classList.add('dark-mode');
+    if (text) text.textContent = 'Modo Claro';
+    if (sunIcon) sunIcon.style.display = 'inline-block';
+    if (moonIcon) moonIcon.style.display = 'none';
+  } else {
+    document.body.classList.remove('dark-mode');
+    if (text) text.textContent = 'Modo Oscuro';
+    if (sunIcon) sunIcon.style.display = 'none';
+    if (moonIcon) moonIcon.style.display = 'inline-block';
+  }
+}
+
+function toggleDarkMode() {
+  state.darkTheme = !state.darkTheme;
+  saveState();
+  initTheme();
+}
+
+// 2. AUTOCOMPLETADO PREDICTIVO DEL BUSCADOR
+function showAutocompleteSuggestions(query) {
+  const container = document.getElementById('search-autocomplete');
+  if (!container) return;
+
+  if (!query || query.length < 2) {
+    container.style.display = 'none';
+    return;
+  }
+
+  const queryLower = query.toLowerCase();
+  
+  // Filtrar catálogo excluyendo NSFW si la zona no está activa
+  let filtered = state.catalog.filter(m => {
+    if (m.nsfw && !state.showNSFW) return false;
+    if (!m.nsfw && state.showNSFW) return false; // En Zona +18 solo mostramos +18
+    return m.title.toLowerCase().includes(queryLower) || m.author.toLowerCase().includes(queryLower);
+  }).slice(0, 5);
+
+  if (filtered.length === 0) {
+    container.style.display = 'none';
+    return;
+  }
+
+  container.innerHTML = filtered.map(m => {
+    const isAnime = m.type === 'anime';
+    const tagLabel = isAnime ? 'Anime' : m.type.toUpperCase();
+    const tagClass = isAnime ? 'badge-anime' : '';
+    return `
+      <div class="autocomplete-item" onclick="selectAutocompleteSuggestion(${m.id})">
+        <img src="${m.cover}" alt="${m.title}" onerror="this.src='https://placehold.co/80x120/555/fff?text=Sin+Portada'">
+        <div class="autocomplete-details">
+          <div class="autocomplete-title">${m.title}</div>
+          <div class="autocomplete-meta">
+            <span class="autocomplete-tag ${tagClass}">${tagLabel}</span>
+            <span class="autocomplete-rating">★ ${m.rating.toFixed(1)}</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  container.style.display = 'block';
+}
+
+function selectAutocompleteSuggestion(mangaId) {
+  const container = document.getElementById('search-autocomplete');
+  if (container) container.style.display = 'none';
+  
+  const searchInput = document.getElementById('search-input');
+  if (searchInput) searchInput.value = '';
+
+  showDetail(mangaId);
+}
+
+// 3. MARCADORES ("CONTINUAR LEYENDO / VIENDO")
+function saveBookmark(mangaId, chapterNum, pageIndexOrTime) {
+  state.bookmarks[mangaId] = {
+    chapter: chapterNum,
+    page: pageIndexOrTime || 1,
+    timestamp: Date.now()
+  };
+  saveState();
+  renderBookmarks();
+}
+
+function renderBookmarks() {
+  const section = document.getElementById('bookmark-section');
+  const grid = document.getElementById('bookmark-grid');
+  if (!section || !grid) return;
+
+  const keys = Object.keys(state.bookmarks);
+  if (keys.length === 0 || state.currentView !== 'catalog') {
+    section.style.display = 'none';
+    return;
+  }
+
+  // Filtrar marcadores válidos según si la Zona +18 está activa
+  const validBookmarks = [];
+  keys.forEach(id => {
+    const manga = state.catalog.find(m => m.id === parseInt(id));
+    if (manga) {
+      if (manga.nsfw && !state.showNSFW) return;
+      if (!manga.nsfw && state.showNSFW) return;
+      validBookmarks.push({
+        manga: manga,
+        bookmark: state.bookmarks[id]
+      });
+    }
+  });
+
+  if (validBookmarks.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  // Ordenar de más reciente a más antiguo y tomar los 3 primeros
+  validBookmarks.sort((a, b) => b.bookmark.timestamp - a.bookmark.timestamp);
+  const topBookmarks = validBookmarks.slice(0, 3);
+
+  grid.innerHTML = topBookmarks.map(b => {
+    const m = b.manga;
+    const book = b.bookmark;
+    const isAnime = m.type === 'anime';
+    const labelType = isAnime ? 'Episodio' : 'Capítulo';
+    
+    return `
+      <div class="bookmark-card">
+        <img src="${m.cover}" alt="${m.title}" onclick="showDetail(${m.id})" onerror="this.src='https://placehold.co/100x140/555/fff?text=Sin+Portada'">
+        <div class="bookmark-info">
+          <div class="bookmark-title" onclick="showDetail(${m.id})">${m.title}</div>
+          <div class="bookmark-progress">Retomar en ${labelType} ${book.chapter}</div>
+          <button class="btn-resume-read" onclick="resumeBookmark(${m.id}, ${book.chapter})">
+            Reanudar ${isAnime ? 'Viendo' : 'Leyendo'}
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  section.style.display = 'block';
+}
+
+function resumeBookmark(mangaId, chapterNum) {
+  const manga = state.catalog.find(m => m.id === mangaId);
+  if (!manga) return;
+  state.selectedManga = manga;
+  if (manga.type === 'anime') {
+    openVideoPlayer(mangaId, chapterNum);
+  } else {
+    openReader(chapterNum);
+  }
+}
+
+// 4. AUTO-SCROLL AJUSTABLE EN EL LECTOR
+var autoScrollInterval = null;
+var autoScrollSpeed = 1.5; // pixeles por frame
+
+function toggleAutoScroll() {
+  const btn = document.getElementById('btn-autoscroll');
+  if (!btn) return;
+
+  if (autoScrollInterval) {
+    stopAutoScroll();
+    showToast("Auto-scroll desactivado");
+  } else {
+    btn.textContent = 'Detener';
+    btn.style.backgroundColor = '#e74c3c';
+    
+    // Auto-scroll loop
+    autoScrollInterval = setInterval(() => {
+      window.scrollBy(0, autoScrollSpeed);
+      
+      // Detener si llega al final de la página
+      if ((window.innerHeight + window.pageYOffset) >= document.body.offsetHeight) {
+        stopAutoScroll();
+        showToast("Llegaste al final de la página");
+      }
+    }, 20);
+    showToast("Auto-scroll activado");
+  }
+}
+
+function adjustScrollSpeed(delta) {
+  autoScrollSpeed = Math.max(0.5, Math.min(6, autoScrollSpeed + (delta * 0.5)));
+  const text = document.getElementById('autoscroll-speed-text');
+  if (text) {
+    text.textContent = autoScrollSpeed.toFixed(1) + 'x';
+  }
+}
+
+function stopAutoScroll() {
+  if (autoScrollInterval) {
+    clearInterval(autoScrollInterval);
+    autoScrollInterval = null;
+  }
+  const btn = document.getElementById('btn-autoscroll');
+  if (btn) {
+    btn.textContent = 'Desplazar';
+    btn.style.backgroundColor = '#27ae60';
+  }
 }
 
 

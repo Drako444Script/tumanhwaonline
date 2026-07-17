@@ -13,8 +13,15 @@
   <div class="topbar">
     <div class="container topbar-inner">
       <span class="welcome-text">¡Bienvenido a TuManhwaOnline, el repositorio de la comunidad!</span>
-      <div class="auth-section" id="auth-section">
-        <!-- Opciones de Login/Registro se cargan aquí -->
+      <div class="topbar-right" style="display: flex; align-items: center; gap: 15px;">
+        <button id="theme-toggle-btn" onclick="toggleDarkMode()" class="btn-theme-toggle" style="background: none; border: none; color: #fff; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 5px; padding: 4px 8px; border-radius: 4px; transition: background 0.2s;">
+          <svg class="theme-icon-sun" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" style="display:none; color: #f1c40f;"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.77" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+          <svg class="theme-icon-moon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" style="color: #fff;"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+          <span id="theme-toggle-text">Modo Oscuro</span>
+        </button>
+        <div class="auth-section" id="auth-section">
+          <!-- Opciones de Login/Registro se cargan aquí -->
+        </div>
       </div>
     </div>
   </div>
@@ -28,9 +35,11 @@
         <span class="logo-tag">Comunidad</span>
       </div>
       
-      <div class="search-box">
-        <input type="text" id="search-input" placeholder="Buscar por nombre, autor...">
+      <div class="search-box" style="position: relative;">
+        <input type="text" id="search-input" placeholder="Buscar por nombre, autor..." autocomplete="off">
         <button onclick="triggerSearch()">Buscar</button>
+        <!-- Sugerencias de Autocompletado -->
+        <div id="search-autocomplete" class="search-autocomplete-box" style="display: none;"></div>
       </div>
     </div>
   </header>
@@ -61,6 +70,12 @@
       
       <!-- Vista de Catálogo -->
       <div id="catalog-view">
+        <!-- Sección de Continuar Leyendo (Marcadores) -->
+        <div id="bookmark-section" style="display: none; margin-bottom: 25px;">
+          <div class="section-title" style="color:#c0392b; border-bottom: 2px solid #c0392b;">Continuar Leyendo</div>
+          <div class="bookmark-grid" id="bookmark-grid" style="display: flex; gap: 15px; overflow-x: auto; padding-bottom: 10px; margin-top: 12px;"></div>
+        </div>
+
         <div class="section-title" id="catalog-section-title">Últimas Publicaciones de la Comunidad</div>
         
         <!-- Barra de sub-filtros exclusiva para Zona +18 -->
