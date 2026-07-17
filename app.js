@@ -139,6 +139,13 @@ async function loadState() {
       state.darkTheme = false;
     }
 
+    try {
+      state.reports = JSON.parse(localStorage.getItem('tm-reports')) || [];
+    } catch (e) {
+      console.warn("Error cargando reportes locales:", e);
+      state.reports = [];
+    }
+
     // Si Supabase está configurado, cargamos en tiempo real con recuperación local en caso de error
     if (supabaseClient) {
       await syncWithSupabase();
@@ -254,6 +261,7 @@ function saveState() {
     localStorage.setItem('tm-catalog', JSON.stringify(state.catalog));
     localStorage.setItem('tm-bookmarks', JSON.stringify(state.bookmarks));
     localStorage.setItem('tm-darktheme', JSON.stringify(state.darkTheme));
+    localStorage.setItem('tm-reports', JSON.stringify(state.reports || []));
   } catch (e) {
     console.warn("Error guardando en localStorage:", e);
   }
@@ -427,6 +435,11 @@ document.addEventListener('DOMContentLoaded', () => {
 function renderAuth() {
   const container = document.getElementById('auth-section');
   if (!container) return;
+
+  const adminBtn = document.getElementById('admin-panel-btn');
+  if (adminBtn) {
+    adminBtn.style.display = isAdmin() ? 'inline-flex' : 'none';
+  }
 
   if (state.currentUser) {
     if (state.currentUser.xp === undefined) state.currentUser.xp = 0;
@@ -1454,28 +1467,33 @@ async function deleteManga(mangaId) {
   var manga = state.catalog.find(function(m) { return m.id === mangaId; });
   if (!manga) return;
 
-  var confirmar = confirm("⚠ ADMIN: ¿Estás seguro de eliminar \"" + manga.title + "\" del catálogo?\n\nEsta acción no se puede deshacer.");
+  var confirmar = confirm("ADVERTENCIA: ¿Estás seguro de eliminar \"" + manga.title + "\" del catálogo?\n\nEsta acción borrará todos los capítulos y comentarios permanentemente.");
   if (!confirmar) return;
 
-  // Eliminar de Supabase si está conectado
   if (supabaseClient) {
+    showToast("Eliminando de la base de datos en el servidor...");
     try {
+      // Borrar primero los comentarios vinculados para evitar violaciones de foreign key
+      await supabaseClient
+        .from('comments')
+        .delete()
+        .eq('manga_id', mangaId);
+
       let { error } = await supabaseClient
         .from('catalog')
         .delete()
         .eq('id', mangaId);
+      
       if (error) throw error;
-      showToast("\"" + manga.title + "\" eliminado del servidor.");
-      await syncWithSupabase();
+      showToast("\"" + manga.title + "\" eliminado del servidor con éxito.");
     } catch (err) {
       console.error("Error al eliminar de Supabase:", err);
-      showToast("Error de conexión. Se eliminó localmente.");
-      deleteLocalManga(mangaId);
+      showToast("Error en servidor. Se eliminó localmente.");
     }
-  } else {
-    deleteLocalManga(mangaId);
   }
 
+  // Borrado local y de caché en cualquier escenario para evitar registros huérfanos
+  deleteLocalManga(mangaId);
   goHome();
 }
 
@@ -2549,9 +2567,26 @@ function doContact(e) {
 function doReportChapter(e) {
   e.preventDefault();
   closeModal('report-modal');
-  e.target.reset();
+  
   if (state.selectedManga) {
-    showToast('Reporte enviado: Capítulo ' + state.currentChapter + ' de ' + state.selectedManga.title);
+    const issueType = document.getElementById('rep-issue-type').value;
+    const details = document.getElementById('rep-details').value;
+    const report = {
+      id: Date.now(),
+      mangaId: state.selectedManga.id,
+      mangaTitle: state.selectedManga.title,
+      chapter: state.currentChapter,
+      issue: issueType,
+      details: details || "Sin detalles",
+      date: new Date().toLocaleString()
+    };
+    
+    if (!state.reports) state.reports = [];
+    state.reports.push(report);
+    saveState();
+    
+    e.target.reset();
+    showToast('Reporte enviado con éxito para el capítulo.');
   }
 }
 
@@ -3214,6 +3249,216 @@ function stopAutoScroll() {
     btn.textContent = 'Desplazar';
     btn.style.backgroundColor = '#27ae60';
   }
+}
+
+// 5. PANEL DE CONTROL DE ADMINISTRACIÓN (DASHBOARD)
+function openAdminDashboard() {
+  if (!isAdmin()) {
+    showToast("No tienes permisos de administrador.");
+    return;
+  }
+  openModal('admin-dashboard-modal');
+  setAdminTab('reports', document.getElementById('btn-admin-tab-reports'));
+}
+
+function setAdminTab(tabName, element) {
+  // Ocultar todos los contenidos de pestaña
+  document.querySelectorAll('.admin-tab-content').forEach(c => c.style.display = 'none');
+  // Desactivar botones
+  document.querySelectorAll('.admin-dashboard-tabs button').forEach(b => b.classList.remove('active'));
+  
+  // Mostrar actual
+  const tabContent = document.getElementById('admin-tab-' + tabName);
+  if (tabContent) tabContent.style.display = 'block';
+  if (element) element.classList.add('active');
+
+  // Cargar info según pestaña
+  if (tabName === 'reports') {
+    renderAdminReports();
+  } else if (tabName === 'catalog-mod') {
+    renderAdminCatalogMod();
+  } else if (tabName === 'stats') {
+    renderAdminStats();
+  }
+}
+
+function renderAdminReports() {
+  const container = document.getElementById('admin-reports-list');
+  if (!container) return;
+
+  if (!state.reports || state.reports.length === 0) {
+    container.innerHTML = '<div style="text-align:center; padding:20px; color:#999; font-size:12px;">No hay reportes de error pendientes.</div>';
+    return;
+  }
+
+  container.innerHTML = state.reports.map(r => {
+    return `
+      <div style="background:#fcf3cf; border:1px solid #f5b041; border-radius:4px; padding:10px; display:flex; justify-content:space-between; align-items:center; gap:12px;">
+        <div style="min-width:0; flex:1; text-align:left;">
+          <div style="font-weight:bold; font-size:12px; color:#7e5109;">${r.mangaTitle} - Capítulo ${r.chapter}</div>
+          <div style="font-size:11px; margin-top:2px;"><strong>Problema:</strong> ${r.issue.toUpperCase()}</div>
+          <div style="font-size:11px; font-style:italic; color:#555; background:#fff; padding:4px; border-radius:2px; margin-top:4px;">"${r.details}"</div>
+          <div style="font-size:9px; color:#888; margin-top:4px;">Reportado: ${r.date}</div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          <button onclick="goToReportedManga(${r.mangaId})" style="background:#2980b9; color:#fff; border:none; padding:4px 8px; border-radius:2px; font-size:10px; font-weight:bold; cursor:pointer;">Ir a Obra</button>
+          <button onclick="resolveReport(${r.id})" style="background:#27ae60; color:#fff; border:none; padding:4px 8px; border-radius:2px; font-size:10px; font-weight:bold; cursor:pointer;">Resuelto</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function goToReportedManga(mangaId) {
+  closeModal('admin-dashboard-modal');
+  showDetail(mangaId);
+}
+
+function resolveReport(reportId) {
+  if (!state.reports) return;
+  state.reports = state.reports.filter(r => r.id !== reportId);
+  saveState();
+  renderAdminReports();
+  showToast("Reporte marcado como resuelto.");
+}
+
+function renderAdminCatalogMod() {
+  const tbody = document.getElementById('admin-catalog-list');
+  if (!tbody) return;
+
+  const searchVal = (document.getElementById('admin-catalog-search')?.value || "").toLowerCase();
+  
+  let list = state.catalog;
+  if (searchVal) {
+    list = list.filter(m => m.title.toLowerCase().includes(searchVal));
+  }
+
+  if (list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:15px; color:#999;">No hay títulos coincidentes.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = list.map(m => {
+    return `
+      <tr style="border-bottom:1px solid #eee;">
+        <td style="padding:8px; font-weight:bold; text-align:left;">${m.title}</td>
+        <td style="padding:8px; text-transform:uppercase; text-align:left;">${m.type}</td>
+        <td style="padding:8px; text-align:left;">
+          <select onchange="changeMangaStatus(${m.id}, this.value)" style="padding:4px; font-size:11px; border-radius:3px;">
+            <option value="En emisión" ${m.status === 'En emisión' ? 'selected' : ''}>En emisión</option>
+            <option value="Completado" ${m.status === 'Completado' ? 'selected' : ''}>Completado</option>
+            <option value="Pausado" ${m.status === 'Pausado' ? 'selected' : ''}>Pausado</option>
+          </select>
+        </td>
+        <td style="padding:8px; text-align:left;">
+          <input type="checkbox" ${m.nsfw ? 'checked' : ''} onchange="toggleMangaNSFW(${m.id})"> Adulto
+        </td>
+        <td style="padding:8px; text-align:center; white-space:nowrap;">
+          <button onclick="closeModal('admin-dashboard-modal'); showDetail(${m.id})" style="background:#34495e; color:#fff; border:none; padding:4px 8px; border-radius:2px; font-size:10px; cursor:pointer;">Editar</button>
+          <button onclick="deleteMangaFromDashboard(${m.id})" style="background:#e74c3c; color:#fff; border:none; padding:4px 8px; border-radius:2px; font-size:10px; cursor:pointer; margin-left:4px;">Borrar</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function changeMangaStatus(mangaId, newStatus) {
+  var manga = state.catalog.find(m => m.id === mangaId);
+  if (!manga) return;
+  manga.status = newStatus;
+  
+  if (supabaseClient) {
+    try {
+      await supabaseClient.from('catalog').update({ status: newStatus }).eq('id', mangaId);
+    } catch(e) {
+      console.warn("No se pudo actualizar en Supabase:", e);
+    }
+  }
+  saveState();
+  renderGrid();
+  showToast(`Estado de "${manga.title}" actualizado a "${newStatus}"`);
+}
+
+async function toggleMangaNSFW(mangaId) {
+  var manga = state.catalog.find(m => m.id === mangaId);
+  if (!manga) return;
+  manga.nsfw = !manga.nsfw;
+  
+  if (supabaseClient) {
+    try {
+      await supabaseClient.from('catalog').update({ nsfw: manga.nsfw }).eq('id', mangaId);
+    } catch(e) {
+      console.warn("No se pudo actualizar NSFW en Supabase:", e);
+    }
+  }
+  saveState();
+  renderGrid();
+  showToast(`Zona +18 de "${manga.title}" establecida en ${manga.nsfw}`);
+}
+
+async function deleteMangaFromDashboard(mangaId) {
+  var manga = state.catalog.find(m => m.id === mangaId);
+  if (!manga) return;
+  
+  var confirmar = confirm(`ADMIN: ¿Estás seguro de eliminar permanentemente "${manga.title}"?\n\nSe borrarán todos sus capítulos y comentarios.`);
+  if (!confirmar) return;
+
+  if (supabaseClient) {
+    try {
+      await supabaseClient.from('comments').delete().eq('manga_id', mangaId);
+      await supabaseClient.from('catalog').delete().eq('id', mangaId);
+    } catch(e) {
+      console.warn("Error en Supabase al borrar:", e);
+    }
+  }
+  
+  deleteLocalManga(mangaId);
+  renderAdminCatalogMod();
+  renderGrid();
+  showToast("Obra eliminada del catálogo.");
+}
+
+function renderAdminStats() {
+  document.getElementById('admin-stat-titles').textContent = state.catalog.length;
+  
+  let totalChapters = 0;
+  let totalViews = 0;
+  state.catalog.forEach(m => {
+    totalChapters += (m.chapters || 0);
+    totalViews += parseInt(m.views || 0);
+  });
+  
+  document.getElementById('admin-stat-chapters').textContent = totalChapters;
+  document.getElementById('admin-stat-views').textContent = totalViews.toLocaleString();
+}
+
+function resetCatalogToSeed() {
+  var confirmar = confirm("⚠ ATENCIÓN: ¿Estás seguro de restaurar el catálogo inicial por defecto?\n\nEsto borrará todas tus obras subidas locales.");
+  if (!confirmar) return;
+  
+  localStorage.removeItem('tm-catalog');
+  state.catalog = getDefaultSeedCatalog();
+  saveState();
+  
+  if (supabaseClient) {
+    showToast("Catálogo local restablecido. La base de datos externa requiere vaciado manual.");
+  } else {
+    showToast("Catálogo local restablecido con éxito.");
+  }
+  
+  closeModal('admin-dashboard-modal');
+  renderGrid();
+}
+
+function clearCachedData() {
+  var confirmar = confirm("¿Deseas vaciar la memoria local de la aplicación?\n\nSe cerrará tu sesión y se restablecerán los valores por defecto.");
+  if (!confirmar) return;
+  
+  localStorage.clear();
+  showToast("Caché borrada. Recargando página...");
+  setTimeout(() => {
+    window.location.reload();
+  }, 1000);
 }
 
 
