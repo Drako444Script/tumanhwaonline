@@ -813,7 +813,7 @@ function toggleNSFWFilter(element) {
     var allTab = document.querySelector('.nsfw-tab');
     if (allTab) allTab.classList.add('active');
     
-    showToast("🔞 Has entrado a la Zona +18");
+    showToast("Has entrado a la Zona +18");
   } else {
     state.showNSFW = false;
     element.classList.remove('active');
@@ -916,7 +916,7 @@ function renderGrid() {
     ` : '';
 
     const badgeTipoClass = m.type === 'anime' ? 'badge-tipo badge-anime' : 'badge-tipo';
-    const badgeTipoText = m.type === 'anime' ? '📺 anime' : m.type;
+    const badgeTipoText = m.type === 'anime' ? 'anime' : m.type;
     const countLabel = m.type === 'anime' ? 'Ep' : 'Cap';
 
     return '<div class="manga-card" onclick="showDetail(' + m.id + ')">' +
@@ -991,7 +991,7 @@ async function showDetail(id) {
             '<tr><td>Géneros:</td><td>' + manga.genres.join(', ') + '</td></tr>' +
             '<tr><td>Subido por:</td><td>' + manga.uploader + '</td></tr>' +
             '<tr><td>Biblioteca:</td><td>' + (libSection ? 'Guardado en: <strong>' + libSection.toUpperCase() + '</strong>' : 'No guardado') + '</td></tr>' +
-            '<tr><td>Visitas totales:</td><td>🔥 ' + (manga.views || 0).toLocaleString() + ' vistas</td></tr>' +
+            '<tr><td>Visitas totales:</td><td>' + (manga.views || 0).toLocaleString() + ' vistas</td></tr>' +
             '<tr><td>Calificación:</td><td>★ ' + (manga.rating || 5.0).toFixed(1) + ' / 5.0</td></tr>' +
             '<tr><td>Puntuar obra:</td><td><div class="star-rating-wrap">' + starsHtml + '</div></td></tr>' +
           '</table>' +
@@ -999,7 +999,7 @@ async function showDetail(id) {
             '<button class="btn-classic-red" onclick="startReading()">' + labelAction + '</button>' +
             '<button class="btn-classic-grey" onclick="openLibraryModal(' + manga.id + ')">' + (libSection ? '★ Cambiar Estado' : '☆ Agregar a Biblioteca') + '</button>' +
             '<button class="btn-classic-grey" onclick="startDownloadSimulation()">↓ Descargar</button>' +
-            (isAdmin() ? '<button class="btn-classic-grey btn-admin-delete" style="background-color:#e74c3c; color:#fff; border-color:#c0392b;" onclick="deleteManga(' + manga.id + ')">🗑 Eliminar Obra (Admin)</button>' : '') +
+            (isAdmin() ? '<button class="btn-classic-grey btn-admin-delete" style="background-color:#e74c3c; color:#fff; border-color:#c0392b;" onclick="deleteManga(' + manga.id + ')">Eliminar Obra (Admin)</button>' : '') +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -1202,7 +1202,6 @@ function renderLibraryGrid() {
 
   if (inLibrary.length === 0) {
     grid.innerHTML = `<div style="grid-column: 1/-1; padding: 50px; text-align: center; color: #7f8c8d;">
-      <div style="font-size: 40px; margin-bottom: 10px;">📚</div>
       No tienes obras en esta sección de tu biblioteca.
     </div>`;
     return;
@@ -1220,7 +1219,7 @@ function renderLibraryGrid() {
     ` : '';
 
     const badgeTipoClass = m.type === 'anime' ? 'badge-tipo badge-anime' : 'badge-tipo';
-    const badgeTipoText = m.type === 'anime' ? '📺 anime' : m.type;
+    const badgeTipoText = m.type === 'anime' ? 'anime' : m.type;
     const countLabel = m.type === 'anime' ? 'Ep' : 'Cap';
 
     return '<div class="manga-card" onclick="showDetail(' + m.id + ')">' +
@@ -1352,7 +1351,7 @@ async function deleteManga(mangaId) {
         .delete()
         .eq('id', mangaId);
       if (error) throw error;
-      showToast("🗑 \"" + manga.title + "\" eliminado del servidor.");
+      showToast("\"" + manga.title + "\" eliminado del servidor.");
       await syncWithSupabase();
     } catch (err) {
       console.error("Error al eliminar de Supabase:", err);
@@ -1385,7 +1384,7 @@ async function deleteComment(mangaId, commentIndex, commentId) {
     showToast("No tienes permisos de administrador.");
     return;
   }
-  var confirmar = confirm("⚠ ADMIN: ¿Eliminar este comentario?");
+  var confirmar = confirm("ADMIN: ¿Eliminar este comentario?");
   if (!confirmar) return;
 
   if (supabaseClient && commentId) {
@@ -1395,7 +1394,7 @@ async function deleteComment(mangaId, commentIndex, commentId) {
         .delete()
         .eq('id', commentId);
       if (error) throw error;
-      showToast("🗑 Comentario eliminado del servidor.");
+      showToast("Comentario eliminado del servidor.");
       renderCommentsList(mangaId);
       return;
     } catch (err) {
@@ -1410,7 +1409,7 @@ async function deleteComment(mangaId, commentIndex, commentId) {
     state.comments[mangaId] = list;
     saveState();
     renderCommentsList(mangaId);
-    showToast("🗑 Comentario eliminado localmente.");
+    showToast("Comentario eliminado localmente.");
   }
 }
 
@@ -1810,7 +1809,7 @@ async function doUpload(e) {
     genres.push(cb.value);
   });
   if (genres.length === 0) {
-    showToast("⚠️ Debes seleccionar al menos un género.");
+    showToast("Debes seleccionar al menos un género.");
     var selector = document.getElementById('up-genres-selector');
     if (selector) {
       selector.style.outline = '2px solid #e74c3c';
@@ -1932,7 +1931,7 @@ function openUploadChapterModal() {
   // Adaptar textos y atributos si es Anime
   const modalHeader = document.querySelector('#upload-chapter-modal .modal-header span');
   if (modalHeader) {
-    modalHeader.textContent = isAnime ? '📤 Subir Nuevo Episodio' : '📤 Subir Nuevo Capítulo';
+    modalHeader.textContent = isAnime ? 'Subir Nuevo Episodio' : 'Subir Nuevo Capítulo';
   }
 
   const mangaLabel = document.querySelector('#upload-chapter-modal label');
@@ -1970,12 +1969,19 @@ function openUploadChapterModal() {
 
   const dropzoneIcon = document.querySelector('#upch-dropzone .upch-dropzone-icon');
   if (dropzoneIcon) {
-    dropzoneIcon.textContent = isAnime ? '📺' : '🖼️ / 📦';
+    dropzoneIcon.innerHTML = isAnime ? 
+      '<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #7f8c8d; margin-bottom: 8px;"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>' : 
+      '<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #7f8c8d; margin-bottom: 8px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>';
   }
 
-  const dropzoneHint = document.querySelector('#upch-dropzone .upch-dropzone-hint:nth-of-type(3)');
-  if (dropzoneHint) {
-    dropzoneHint.textContent = isAnime ? 'Acepta formatos MP4, WebM y Ogg' : 'Acepta JPG, PNG, WebP o archivos comprimidos ZIP';
+  const clickHint = document.getElementById('upch-dropzone-click-hint');
+  if (clickHint) {
+    clickHint.textContent = isAnime ? 'o haz clic para seleccionar el video desde tu dispositivo' : 'o haz clic para seleccionarlos desde tu dispositivo';
+  }
+
+  const formatHint = document.getElementById('upch-dropzone-format-hint');
+  if (formatHint) {
+    formatHint.textContent = isAnime ? 'Acepta formatos MP4, WebM y Ogg' : 'Acepta JPG, PNG, WebP o archivos comprimidos ZIP';
   }
 
   const pagesTextarea = document.getElementById('upch-pages');
@@ -1983,13 +1989,15 @@ function openUploadChapterModal() {
     pagesTextarea.placeholder = isAnime ? 'https://ejemplo.com/episodio1.mp4\no enlace de YouTube' : 'https://i.imgur.com/pag1.jpg\nhttps://i.imgur.com/pag2.jpg';
     var summaryText = pagesTextarea.parentNode.querySelector('summary');
     if (summaryText) {
-      summaryText.textContent = isAnime ? '📎 O pega el enlace de video (alternativa)' : '📎 O pega URLs de imágenes (alternativa)';
+      summaryText.innerHTML = isAnime ? 
+        '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px; color: #7f8c8d;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>O pega el enlace de video (alternativa)' : 
+        '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px; color: #7f8c8d;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>O pega URLs de imágenes (alternativa)';
     }
   }
 
   const submitBtn = document.getElementById('upch-submit-btn');
   if (submitBtn) {
-    submitBtn.textContent = isAnime ? '📤 Publicar Episodio' : '📤 Publicar Capítulo';
+    submitBtn.textContent = isAnime ? 'Publicar Episodio' : 'Publicar Capítulo';
   }
 
   openModal('upload-chapter-modal');
@@ -2352,7 +2360,7 @@ function doContact(e) {
   e.preventDefault();
   closeModal('contact-modal');
   e.target.reset();
-  showToast("✉ ¡Mensaje enviado con éxito a soporte!");
+  showToast("¡Mensaje enviado con éxito a soporte!");
 }
 
 function doReportChapter(e) {
@@ -2360,7 +2368,7 @@ function doReportChapter(e) {
   closeModal('report-modal');
   e.target.reset();
   if (state.selectedManga) {
-    showToast('⚠ Reporte enviado: Capítulo ' + state.currentChapter + ' de ' + state.selectedManga.title);
+    showToast('Reporte enviado: Capítulo ' + state.currentChapter + ' de ' + state.selectedManga.title);
   }
 }
 
@@ -2392,7 +2400,7 @@ function startDownloadSimulation() {
       clearInterval(interval);
       setTimeout(function() {
         closeModal('download-modal');
-        showToast("💾 Archivo TuManhwaOnline_Pack.zip descargado (Simulación)");
+        showToast("Archivo TuManhwaOnline_Pack.zip descargado (Simulación)");
 
         var element = document.createElement('a');
         var fileContent = 'TuManhwaOnline - Info\nTítulo: ' + state.selectedManga.title + '\nAutor: ' + state.selectedManga.author + '\nCapítulos: ' + state.selectedManga.chapters + '\n¡Gracias por la comunidad de TuManhwaOnline!';
@@ -2494,7 +2502,7 @@ function addXP(amount) {
   
   if (newLevel > state.currentUser.level) {
     state.currentUser.level = newLevel;
-    showToast(`🎉 ¡Subiste de Nivel! Ahora eres Nivel ${newLevel} [${getUserRankName(newLevel)}]`);
+    showToast(`¡Subiste de Nivel! Ahora eres Nivel ${newLevel} [${getUserRankName(newLevel)}]`);
   }
   
   saveState();
@@ -2679,8 +2687,8 @@ async function openVideoPlayer(mangaId, episodeNum) {
           ${isDemo ? '<span class="demo-tag" title="Este es un video de demostración gratuito para pruebas">DEMO</span>' : ''}
         </div>
         <div class="player-header-right">
-          <button class="btn-classic-grey btn-theater-mode" onclick="toggleTheaterMode()"><span class="icon">🎬</span> Modo Cine</button>
-          <button class="btn-reportar-error" onclick="openModal('report-modal')">⚠ Reportar</button>
+          <button class="btn-classic-grey btn-theater-mode" onclick="toggleTheaterMode()"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px; color: #fff;"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line></svg>Modo Cine</button>
+          <button class="btn-reportar-error" onclick="openModal('report-modal')"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px; color: #fff;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>Reportar</button>
           <button class="btn-cerrar-lector" onclick="closeReader()">✕ Cerrar</button>
         </div>
       </div>

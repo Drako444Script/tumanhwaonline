@@ -2466,6 +2466,59 @@ body.zona-nsfw-active .section-title {
   }
 }
 
+/* ═════════════════════════════════════════════════════════
+   ── OPTIMIZACIONES PARA DISPOSITIVOS MÓVILES (iOS / ANDROID) ──
+   ═════════════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+  /* Evitar auto-zoom en iOS Safari */
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  input[type="url"],
+  input[type="password"],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  /* Aumentar área táctil en botones para móviles */
+  .btn-submit,
+  .btn-classic-red,
+  .btn-classic-grey,
+  .btn-comentar,
+  .btn-agregar-cap {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 18px !important;
+    font-weight: 700;
+  }
+
+  .close-btn {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+  }
+
+  /* Mejoras para la lista de capítulos en pantallas pequeñas */
+  .chapter-row {
+    padding: 12px 8px !important;
+  }
+
+  .chapter-title {
+    font-size: 12px !important;
+  }
+
+  .chapter-date {
+    font-size: 10px !important;
+  }
+}
+
+
 
 
 
